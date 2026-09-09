@@ -395,7 +395,7 @@ function setupRealtimeWebsockets() {
 async function loadBoards(isSilent = false) {
   if (!isSilent) showLoader(true);
   try {
-    const { data: boards, error } = await supabase
+    const { data: boards, error } = await supabaseClient
       .from("boards")
       .select("*, cards(id)")
       .order("created_at", { ascending: false });
@@ -688,7 +688,7 @@ async function confirmDeleteBoard(boardId) {
 async function loadCards(boardId, isSilent = false) {
   if (!isSilent) showLoader(true);
   try {
-    const { data: cards, error } = await supabase
+    const { data: cards, error } = await supabaseClient
       .from("cards")
       .select("*, votes(id, user_email), comments(id)")
       .eq("board_id", boardId)
@@ -1227,7 +1227,7 @@ async function openCommentsModal(cardId) {
 
 async function loadComments(cardId, isSilent = false) {
   try {
-    const { data: comments, error } = await supabase
+    const { data: comments, error } = await supabaseClient
       .from("comments")
       .select("*")
       .eq("card_id", cardId)
