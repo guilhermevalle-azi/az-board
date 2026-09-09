@@ -690,16 +690,16 @@ async function loadCards(boardId, isSilent = false) {
   try {
     const { data: cards, error } = await supabaseClient
       .from("cards")
-      .select("*, votes(id, user_email), comments(id)")
+      .select("*, votes(id, voter_email), comments(id)")
       .eq("board_id", boardId)
-      .order("is_pinned", { ascending: false })
+      .order("pinned", { ascending: false })
       .order("created_at", { ascending: false });
 
     if (!isSilent) showLoader(false);
     if (error) throw error;
 
     state.cards = (cards || []).map(c => {
-      const userVoted = state.user && c.votes ? c.votes.some(v => v.user_email === state.user.email) : false;
+      const userVoted = state.user && c.votes ? c.votes.some(v => (v.voter_email || v.user_email) === state.user.email) : false;
       return {
         ...c,
         vote_count: c.votes ? c.votes.length : 0,
@@ -749,7 +749,7 @@ function renderCardsList() {
 
   list.forEach(card => {
     const isOwnerOrAdmin = state.user && (card.author_email === state.user.email || state.user.isAdmin || state.user.isMasterAdmin);
-    const themeClass = `card-theme-${card.color_theme || 'white'}`;
+    const themeClass = `card-theme-${card.card_color || card.color_theme || 'white'}`;
 
     const cardEl = document.createElement("div");
     cardEl.className = `masonry-item glass-card ${themeClass} rounded-2xl p-4 sm:p-5 flex flex-col justify-between relative group animate-fade-in`;
@@ -785,7 +785,7 @@ function renderCardsList() {
       <!-- Cabeçalho do Card -->
       <div class="flex items-start justify-between gap-2">
         <div class="flex items-center gap-2">
-          ${card.is_pinned ? '<i data-lucide="pin" class="w-3.5 h-3.5 text-[#D75B36] flex-shrink-0 fill-[#D75B36]"></i>' : ''}
+          ${(card.pinned || card.is_pinned) ? '<i data-lucide="pin" class="w-3.5 h-3.5 text-[#D75B36] flex-shrink-0 fill-[#D75B36]"></i>' : ''}
           <h4 class="font-title text-sm text-[#0A2334] leading-snug font-semibold">${escapeHtml(card.title)}</h4>
         </div>
         ${isOwnerOrAdmin ? `
@@ -794,8 +794,8 @@ function renderCardsList() {
               <i data-lucide="more-horizontal" class="w-4 h-4"></i>
             </button>
             <div class="hidden group-hover/menu:block absolute right-0 top-6 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-20">
-              <button type="button" class="btn-pin-card w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5" data-id="${card.id}" data-pinned="${card.is_pinned}">
-                <i data-lucide="pin" class="w-3 h-3 text-[#D75B36]"></i> ${card.is_pinned ? 'Desafixar' : 'Fixar no Topo'}
+              <button type="button" class="btn-pin-card w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5" data-id="${card.id}" data-pinned="${card.pinned || card.is_pinned}">
+                <i data-lucide="pin" class="w-3 h-3 text-[#D75B36]"></i> ${(card.pinned || card.is_pinned) ? 'Desafixar' : 'Fixar no Topo'}
               </button>
               <button type="button" class="btn-edit-card w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5" data-id="${card.id}">
                 <i data-lucide="edit-3" class="w-3 h-3 text-[#173057]"></i> Editar
@@ -899,7 +899,7 @@ function openEditCardModal(cardId) {
   document.getElementById("card-id-hidden").value = card.id;
   document.getElementById("card-title-input").value = card.title || "";
   document.getElementById("card-content-input").value = card.content || "";
-  document.getElementById("card-pinned-toggle").checked = !!card.is_pinned;
+  document.getElementById("card-pinned-toggle").checked = !!(card.pinned || card.is_pinned);
 
   const type = card.media_type || "text";
   const radio = document.querySelector(`input[name="card_type"][value="${type}"]`);
@@ -913,7 +913,7 @@ function openEditCardModal(cardId) {
     document.getElementById("card-media-preview").innerHTML = `<img src="${card.media_url}" class="max-h-36 object-contain rounded">`;
   }
 
-  selectCardColor(card.color_theme || "white");
+  selectCardColor(card.card_color || card.color_theme || "white");
   openModal("modal-card");
 }
 
@@ -951,8 +951,8 @@ async function handleCardFormSubmit(e) {
       const updatePayload = {
         title: title,
         content: content,
-        color_theme: color,
-        is_pinned: isPinned,
+        card_color: color,
+        pinned: isPinned,
         media_type: mediaType
       };
       if (mediaUrl) updatePayload.media_url = mediaUrl;
@@ -966,8 +966,8 @@ async function handleCardFormSubmit(e) {
         board_id: state.activeBoard.id,
         title: title,
         content: content,
-        color_theme: color,
-        is_pinned: isPinned,
+        card_color: color,
+        pinned: isPinned,
         media_type: mediaType,
         media_url: mediaUrl,
         author_name: state.user?.name || "Colaborador",
@@ -1021,7 +1021,7 @@ async function uploadImageToSupabaseStorage(file) {
 
 async function togglePinCard(cardId, currentPinned) {
   try {
-    const { error } = await supabaseClient.from("cards").update({ is_pinned: !currentPinned }).eq("id", cardId);
+    const { error } = await supabaseClient.from("cards").update({ pinned: !currentPinned }).eq("id", cardId);
     if (error) throw error;
     showToast(!currentPinned ? "Card fixado no topo!" : "Card desafixado!", "info");
     if (state.activeBoard) await loadCards(state.activeBoard.id, true);
@@ -1060,11 +1060,11 @@ async function handleCardVoteClick(cardId) {
   try {
     if (card.has_voted) {
       // Remove voto
-      await supabaseClient.from("votes").delete().match({ card_id: cardId, user_email: state.user.email });
+      await supabaseClient.from("votes").delete().match({ card_id: cardId, voter_email: state.user.email });
       showToast("Voto removido!", "info");
     } else {
       // Adiciona voto
-      await supabaseClient.from("votes").insert([{ card_id: cardId, user_email: state.user.email }]);
+      await supabaseClient.from("votes").insert([{ board_id: state.activeBoard.id, card_id: cardId, voter_email: state.user.email }]);
       showToast("Voto registrado com sucesso!", "success");
     }
     if (state.activeBoard) await loadCards(state.activeBoard.id, true);
@@ -1106,12 +1106,13 @@ async function submitEnqueteVote() {
   try {
     // Remove votos anteriores do usuário neste mural para garantir voto único na enquete
     const cardIds = state.cards.map(c => c.id);
-    await supabaseClient.from("votes").delete().in("card_id", cardIds).eq("user_email", state.user.email);
+    await supabaseClient.from("votes").delete().match({ board_id: state.activeBoard.id, voter_email: state.user.email });
 
     // Insere o novo voto
     const { error } = await supabaseClient.from("votes").insert([{
+      board_id: state.activeBoard.id,
       card_id: selected,
-      user_email: state.user.email
+      voter_email: state.user.email
     }]);
     if (error) throw error;
 
@@ -1272,7 +1273,7 @@ function renderCommentsList() {
           ` : ''}
         </div>
       </div>
-      <p class="font-body text-gray-600 pl-6 leading-relaxed">${escapeHtml(c.content)}</p>
+      <p class="font-body text-gray-600 pl-6 leading-relaxed">${escapeHtml(c.comment_text || c.content)}</p>
     `;
     container.appendChild(item);
   });
@@ -1295,7 +1296,7 @@ async function handleCommentSubmit(e) {
   try {
     const { error } = await supabaseClient.from("comments").insert([{
       card_id: state.activeCardForComments,
-      content: content,
+      comment_text: content,
       author_name: state.user?.name || "Colaborador",
       author_email: state.user?.email || MASTER_ADMIN
     }]);
