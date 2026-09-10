@@ -146,74 +146,98 @@
 /* Layout 1: Masonry de Cards (Estilo Padlet / Mural Livre em Cascata) */
 .layout-masonry {
   column-count: 1;
-  column-gap: 1rem;
+  column-gap: 1.25rem;
 }
 
-@media (min-width: 600px) {
+@media (min-width: 560px) {
   .layout-masonry {
     column-count: 2;
-    column-gap: 1rem;
+    column-gap: 1.25rem;
   }
 }
 
-@media (min-width: 900px) {
+@media (min-width: 840px) {
   .layout-masonry {
     column-count: 3;
-    column-gap: 1rem;
+    column-gap: 1.35rem;
   }
 }
 
-@media (min-width: 1180px) {
+@media (min-width: 1080px) {
   .layout-masonry {
     column-count: 4;
-    column-gap: 1rem;
+    column-gap: 1.35rem;
   }
 }
 
-@media (min-width: 1536px) {
+/* 5 cards por linha na resolução 1366px */
+@media (min-width: 1280px) {
   .layout-masonry {
     column-count: 5;
-    column-gap: 1.25rem;
+    column-gap: 1.35rem;
+  }
+}
+
+/* 6 cards por linha na resolução 1920px */
+@media (min-width: 1650px) {
+  .layout-masonry {
+    column-count: 6;
+    column-gap: 1.5rem;
   }
 }
 
 .masonry-item {
   break-inside: avoid;
-  margin-bottom: 1rem;
+  margin-bottom: 1.35rem;
+}
+
+@media (min-width: 1650px) {
+  .masonry-item {
+    margin-bottom: 1.5rem;
+  }
 }
 
 /* Layout 2: Grade Alinhada (Grid Uniforme) */
 .layout-grid {
   display: grid;
   grid-template-columns: repeat(1, minmax(0, 1fr));
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
-@media (min-width: 600px) {
+@media (min-width: 560px) {
   .layout-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1rem;
+    gap: 1.25rem;
   }
 }
 
-@media (min-width: 900px) {
+@media (min-width: 840px) {
   .layout-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1rem;
+    gap: 1.35rem;
   }
 }
 
-@media (min-width: 1180px) {
+@media (min-width: 1080px) {
   .layout-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 1rem;
+    gap: 1.35rem;
   }
 }
 
-@media (min-width: 1536px) {
+/* 5 cards por linha na resolução 1366px */
+@media (min-width: 1280px) {
   .layout-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 1.25rem;
+    gap: 1.35rem;
+  }
+}
+
+/* 6 cards por linha na resolução 1920px */
+@media (min-width: 1650px) {
+  .layout-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 1.5rem;
   }
 }
 
@@ -292,9 +316,9 @@ body.timeline-mode-active {
 /* Cada item da Linha do Tempo Horizontal (ocupa toda a altura disponível da viewport) */
 .timeline-item {
   position: relative;
-  width: 320px;
-  min-width: 300px;
-  max-width: 340px;
+  width: 285px;
+  min-width: 265px;
+  max-width: 305px;
   height: 100% !important;
   max-height: 100% !important;
   flex-shrink: 0;
