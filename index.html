@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>AZ Board - Mural Colaborativo Realtime</title>
+  <title>AZ Board - Mural Colaborativo</title>
 
   <!-- Google Fonts: Tomorrow (max medium 500), Barlow Condensed (bold), Barlow -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -44,10 +44,10 @@
   <!-- AZ Board Stylesheet -->
   <link rel="stylesheet" href="style.css">
 </head>
-<body class="min-h-screen flex flex-col antialiased selection:bg-[#D75B36] selection:text-white relative bg-[#0A2334] text-gray-900">
+<body class="min-h-screen flex flex-col antialiased selection:bg-[#D75B36] selection:text-white relative bg-[#F4F6F8] text-gray-900">
 
   <!-- Fundo Global Fixo do Quadro -->
-  <div id="board-custom-bg" class="fixed inset-0 z-0 transition-all duration-500 pointer-events-none"></div>
+  <div id="board-custom-bg" class="fixed inset-0 z-0 transition-all duration-500 pointer-events-none bg-[#F4F6F8]"></div>
 
   <!-- ======================================================================
        1. TELA DE LOGIN CORPORATIVO (EXIBIDA QUANDO NÃO AUTENTICADO)
@@ -64,10 +64,10 @@
       </div>
 
       <h1 class="font-title text-2xl font-semibold text-[#0A2334] tracking-tight mb-1">AZ Board</h1>
-      <p class="font-subtitle-semibold text-xs uppercase tracking-widest text-[#D75B36] mb-6">Mural Colaborativo Realtime</p>
+      <p class="font-subtitle-semibold text-xs uppercase tracking-widest text-[#D75B36] mb-6">Mural Colaborativo</p>
 
       <p class="font-body text-xs text-gray-600 mb-8 leading-relaxed">
-        Espaço corporativo para compartilhar ideias, fotos, vídeos, debater e votar nos projetos da equipe em tempo real.
+        Espaço corporativo para compartilhar ideias, fotos, vídeos, debater e votar nos projetos da equipe.
       </p>
 
       <!-- Mensagem de Erro / Alerta de Domínio Não Autorizado -->
@@ -98,8 +98,8 @@
        ====================================================================== -->
   <div id="app-shell" class="hidden flex-1 flex flex-col min-h-screen relative z-10">
 
-    <!-- HEADER GLOBAL (GLASSMORPHISM) -->
-    <header id="main-app-header" class="glass-header sticky top-0 z-40 text-white py-2.5 px-4 sm:px-6">
+    <!-- HEADER GLOBAL (GLASSMORPHISM) - OCULTO PARA MANTER O DESIGN LIMPO COM GAVETA ADMIN IGUAL AO MURAL -->
+    <header id="main-app-header" class="hidden glass-header sticky top-0 z-40 text-white py-2.5 px-4 sm:px-6">
       <div class="max-w-[1600px] mx-auto flex items-center justify-between gap-3">
         
         <!-- Logo & Título -->
@@ -110,9 +110,6 @@
           <div>
             <div class="flex items-center gap-2">
               <h1 class="font-title text-base tracking-tight text-white leading-none">AZ Board</h1>
-              <span class="text-[9px] uppercase font-subtitle-semibold bg-emerald-600 text-white px-2 py-0.5 rounded-full flex items-center gap-1 font-bold">
-                <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span> Realtime
-              </span>
               <span id="admin-badge" class="hidden text-[9px] uppercase font-subtitle-semibold bg-[#DC7B52] text-white px-2 py-0.5 rounded-full font-bold">Admin</span>
             </div>
             <span class="font-subtitle-semibold text-[11px] text-[#CDCDCD] tracking-wider uppercase">Mural Colaborativo</span>
@@ -261,20 +258,34 @@
       <!-- ====================================================================
            TELA 1: DASHBOARD (LISTA DE QUADROS/MURAIS)
            ==================================================================== -->
-      <div id="view-dashboard" class="flex-1 max-w-[1600px] mx-auto w-full p-4 sm:p-6 lg:p-8">
+      <div id="view-dashboard" class="flex-1 max-w-[1600px] mx-auto w-full p-4 sm:p-6 lg:p-8 pt-8 sm:pt-10">
         
         <!-- Hero Topo do Dashboard -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 bg-gradient-to-r from-[#0A2334] to-[#173057] text-white p-5 sm:p-7 rounded-3xl shadow-xl border border-white/10 relative overflow-hidden">
           <div class="absolute right-0 top-0 w-96 h-96 bg-[#D75B36]/15 rounded-full blur-3xl pointer-events-none"></div>
           <div class="relative z-10">
-            <span class="font-subtitle text-xs text-[#DC7B52] tracking-widest uppercase">Área Colaborativa Workspace</span>
-            <h2 class="font-title text-2xl sm:text-3xl text-white mt-0.5 mb-1.5">Meus Murais &amp; Ideias</h2>
-            <p class="font-body text-xs sm:text-sm text-[#CDCDCD] max-w-xl">Crie murais para debater projetos, compartilhar fotos e vídeos, comentar e votar nas melhores ideias em tempo real.</p>
+            <span class="font-subtitle text-xs text-[#DC7B52] tracking-widest uppercase flex items-center gap-1.5">
+              <span>👋</span> Conecte-se &amp; Participe
+            </span>
+            <h2 id="dashboard-hero-title" class="font-title text-2xl sm:text-3xl text-white mt-0.5 mb-1.5">Escolha um mural e participe!</h2>
+            <p id="dashboard-hero-desc" class="font-body text-xs sm:text-sm text-[#CDCDCD] max-w-xl">Seja bem-vindo(a)! Escolha um dos murais abertos abaixo para ver as novidades da equipe, compartilhar suas ideias com fotos e vídeos, interagir nos comentários e votar nos projetos em destaque.</p>
           </div>
-          <button id="btn-create-board-hero" class="hidden relative z-10 self-start sm:self-center px-4 py-2.5 bg-[#D75B36] hover:bg-[#DC7B52] text-white rounded-2xl font-subtitle-semibold text-xs sm:text-sm shadow-lg shadow-[#D75B36]/30 flex items-center gap-2 hover:scale-105 active:scale-95 transition-all">
-            <i data-lucide="plus" class="w-4 h-4"></i>
-            <span>CRIAR NOVO MURAL</span>
-          </button>
+          <div class="relative z-10 flex items-center gap-3 self-start sm:self-center flex-wrap">
+            <button id="btn-create-board-hero" class="hidden px-4 py-2.5 bg-[#D75B36] hover:bg-[#DC7B52] text-white rounded-2xl font-subtitle-semibold text-xs sm:text-sm shadow-lg shadow-[#D75B36]/30 flex items-center gap-2 hover:scale-105 active:scale-95 transition-all cursor-pointer">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              <span>CRIAR NOVO MURAL</span>
+            </button>
+            <!-- Perfil do Usuário / Sair no Dashboard -->
+            <div id="dashboard-user-chip" class="flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15">
+              <div class="w-7 h-7 rounded-full bg-[#173057] border border-[#D75B36] text-white flex items-center justify-center font-bold text-xs shadow-sm overflow-hidden" id="dashboard-avatar-container">
+                <span id="dashboard-avatar-initials">U</span>
+              </div>
+              <span class="font-body-semibold text-xs text-white max-w-[120px] truncate" id="dashboard-user-name">Usuário</span>
+              <button id="btn-dashboard-logout" title="Sair da Conta" class="p-1 text-gray-300 hover:text-red-300 transition-colors ml-1 cursor-pointer">
+                <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Grid de Quadros -->
@@ -282,14 +293,15 @@
           <!-- Renderizado dinamicamente via JavaScript -->
         </div>
 
-        <!-- Mensagem Vazia -->
-        <div id="empty-boards-msg" class="hidden py-16 text-center">
-          <div class="w-16 h-16 bg-white/10 rounded-3xl shadow-md flex items-center justify-center mx-auto mb-3 text-[#D75B36] border border-white/10">
+        <!-- Mensagem Vazia (Card Elevado de Alto Contraste para Fundo Claro) -->
+        <div id="empty-boards-msg" class="hidden my-8 max-w-xl mx-auto p-8 sm:p-10 bg-white rounded-3xl border border-slate-200/90 shadow-xl text-center relative overflow-hidden ring-1 ring-black/5 animate-fade-in">
+          <div class="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#0A2334] via-[#D75B36] to-[#173057]"></div>
+          <div class="w-16 h-16 bg-orange-50 rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-4 text-[#D75B36] border border-orange-200/60">
             <i data-lucide="layout" class="w-8 h-8"></i>
           </div>
-          <h3 id="empty-boards-title" class="font-title text-lg text-white mb-1">Nenhum mural disponível</h3>
-          <p id="empty-boards-desc" class="font-body text-xs text-[#CDCDCD] max-w-md mx-auto mb-4">Crie o primeiro mural colaborativo para a equipe começar a postar fotos, vídeos e ideias.</p>
-          <button id="btn-create-board-empty" class="hidden px-4 py-2 bg-[#D75B36] text-white rounded-xl text-xs font-subtitle-semibold hover:bg-[#DC7B52]">
+          <h3 id="empty-boards-title" class="font-title text-xl text-[#0A2334] font-bold mb-2 tracking-tight">Nenhum mural aberto no momento</h3>
+          <p id="empty-boards-desc" class="font-body text-sm text-[#1E293B] max-w-md mx-auto mb-6 leading-relaxed font-medium">Nenhum mural aberto para participação no momento. Assim que a equipe disponibilizar um novo mural aberto, ele aparecerá aqui para você participar e postar suas ideias!</p>
+          <button id="btn-create-board-empty" class="hidden px-5 py-2.5 bg-[#D75B36] text-white rounded-xl text-xs font-subtitle-semibold hover:bg-[#DC7B52] shadow-lg shadow-[#D75B36]/30 cursor-pointer transition-all hover:scale-105 active:scale-95">
             + Criar Primeiro Mural
           </button>
         </div>
