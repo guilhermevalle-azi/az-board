@@ -247,8 +247,8 @@
                 </div>
               </div>
 
-              <!-- Direita: Ferramentas Administrativas Agrupadas -->
-              <div class="flex items-center flex-wrap gap-2">
+              <!-- Direita: Ferramentas Administrativas Agrupadas (Ocultas na Visão Usuário) -->
+              <div id="admin-tools-group" class="flex items-center flex-wrap gap-2">
                 <!-- Votação Oficial Enquete -->
                 <button id="btn-vote-board" class="hidden px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-subtitle-semibold flex items-center gap-1.5 shadow-sm transition-all">
                   <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
@@ -318,19 +318,18 @@
             </div>
           </div>
 
-          <!-- Filtro de Busca & Ordenação Rápida Integrada (Glass Pill) -->
+          <!-- Filtro de Busca & Compartilhar Integrados no Mural -->
           <div class="flex items-center gap-2.5 self-start sm:self-auto">
             <div class="relative">
               <i data-lucide="search" class="w-3.5 h-3.5 text-white/60 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
               <input type="text" id="board-search-input" placeholder="Pesquisar neste mural..." class="pl-8 pr-3 py-1.5 bg-black/30 hover:bg-black/40 focus:bg-black/50 backdrop-blur-md border border-white/20 rounded-full text-xs text-white placeholder-white/60 focus:outline-none focus:ring-1 focus:ring-[#D75B36] transition-all font-body w-40 sm:w-56" />
             </div>
-            <div class="bg-black/30 hover:bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 flex items-center gap-1.5">
-              <i data-lucide="arrow-up-down" class="w-3.5 h-3.5 text-white/60"></i>
-              <select id="board-sort-select" class="bg-transparent text-xs text-white focus:outline-none cursor-pointer font-body">
-                <option value="recent" class="bg-[#0A2334] text-white">Mais Recentes</option>
-                <option value="alphabetical" class="bg-[#0A2334] text-white">A-Z</option>
-              </select>
-            </div>
+
+            <!-- Botão Compartilhar: Única ação no mural para o usuário -->
+            <button type="button" id="btn-share-board-canvas" class="px-3.5 py-1.5 rounded-full bg-black/30 hover:bg-black/50 backdrop-blur-md border border-white/20 text-white text-xs font-subtitle-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer" title="Compartilhar Link do Mural">
+              <i data-lucide="share-2" class="w-3.5 h-3.5 text-emerald-400"></i>
+              <span>Compartilhar</span>
+            </button>
           </div>
         </div>
 
@@ -353,13 +352,26 @@
           </div>
         </div>
 
-        <!-- Botão Flutuante de Novo Card (FAB) no Canto Inferior Direito -->
-        <button id="btn-fab-add-card" class="fixed bottom-6 right-6 z-40 pl-4 pr-5 py-3.5 rounded-full bg-[#D75B36] hover:bg-[#DC7B52] text-white font-subtitle-semibold text-sm shadow-2xl shadow-black/40 flex items-center gap-2.5 hover:scale-105 active:scale-95 transition-all border border-white/20" title="Criar Novo Card">
-          <div class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
-            <i data-lucide="plus" class="w-4 h-4 stroke-[2.5]"></i>
-          </div>
-          <span class="tracking-wider uppercase font-bold text-xs sm:text-sm">NOVO CARD</span>
-        </button>
+        <!-- Barra de Ações Flutuantes no Canto Inferior Direito (Votação & Novo Card) -->
+        <div class="fixed bottom-6 right-6 z-40 flex items-center gap-3">
+          
+          <!-- Botão Flutuante de Votação (Exibido de forma aparente quando o mural tem votação ativa) -->
+          <button type="button" id="btn-fab-vote-board" class="hidden pl-4 pr-5 py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-subtitle-semibold text-sm shadow-2xl shadow-black/40 flex items-center gap-2.5 hover:scale-105 active:scale-95 transition-all border border-white/20 cursor-pointer" title="Votar na Enquete do Mural">
+            <div class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+              <i data-lucide="check-circle" class="w-4 h-4 stroke-[2.5]"></i>
+            </div>
+            <span class="tracking-wider uppercase font-bold text-xs sm:text-sm">VOTAR NA ENQUETE</span>
+          </button>
+
+          <!-- Botão Flutuante de Novo Card -->
+          <button type="button" id="btn-fab-add-card" class="pl-4 pr-5 py-3.5 rounded-full bg-[#D75B36] hover:bg-[#DC7B52] text-white font-subtitle-semibold text-sm shadow-2xl shadow-black/40 flex items-center gap-2.5 hover:scale-105 active:scale-95 transition-all border border-white/20 cursor-pointer" title="Criar Novo Card">
+            <div class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+              <i data-lucide="plus" class="w-4 h-4 stroke-[2.5]"></i>
+            </div>
+            <span class="tracking-wider uppercase font-bold text-xs sm:text-sm">NOVO CARD</span>
+          </button>
+
+        </div>
 
       </div>
 
