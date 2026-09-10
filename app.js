@@ -52,7 +52,8 @@ const state = {
   isAdminDrawerOpen: false,
   currentLayout: 'masonry',
   currentSort: 'recent',
-  keepPinnedTop: true
+  keepPinnedTop: true,
+  userAvatars: {}
 };
 
 // ============================================================================
@@ -184,7 +185,15 @@ async function handleAuthenticatedUser(supabaseUser) {
     name = email.split("@")[0].replace(/\./g, " ");
     name = name.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   }
-  const avatarUrl = supabaseUser.user_metadata?.avatar_url || null;
+  const avatarUrl = supabaseUser.user_metadata?.avatar_url || 
+                    supabaseUser.user_metadata?.picture || 
+                    supabaseUser.user_metadata?.photo_url || 
+                    supabaseUser.user_metadata?.avatar || 
+                    null;
+
+  if (avatarUrl) {
+    cacheAuthorAvatar(email, avatarUrl);
+  }
 
   const isMaster = email.toLowerCase() === MASTER_ADMIN.toLowerCase();
   const cachedAdmin = localStorage.getItem("az_admin_" + email.toLowerCase()) === "true";
@@ -384,6 +393,69 @@ function renderUserInfo() {
 }
 
 // ============================================================================
+// GESTÃO DE AVATARES E FOTOS DE PERFIL (GOOGLE OAUTH & WORKSPACE)
+// ============================================================================
+function cacheAuthorAvatar(email, avatarUrl) {
+  if (!email || !avatarUrl) return;
+  const cleanEmail = email.toLowerCase().trim();
+  if (!state.userAvatars) state.userAvatars = {};
+  state.userAvatars[cleanEmail] = avatarUrl;
+  try {
+    localStorage.setItem("az_avatar_" + cleanEmail, avatarUrl);
+  } catch (e) {}
+}
+
+function getAuthorAvatar(email) {
+  if (!email) return null;
+  const cleanEmail = email.toLowerCase().trim();
+  // 1. Usuário atual logado
+  if (state.user && state.user.email && state.user.email.toLowerCase().trim() === cleanEmail && state.user.avatarUrl) {
+    return state.user.avatarUrl;
+  }
+  // 2. Cache em memória da sessão
+  if (state.userAvatars && state.userAvatars[cleanEmail]) {
+    return state.userAvatars[cleanEmail];
+  }
+  // 3. Cache persistido no localStorage
+  try {
+    const cached = localStorage.getItem("az_avatar_" + cleanEmail);
+    if (cached) {
+      if (!state.userAvatars) state.userAvatars = {};
+      state.userAvatars[cleanEmail] = cached;
+      return cached;
+    }
+  } catch (e) {}
+  return null;
+}
+
+function renderAuthorAvatar(authorEmail, authorName, authorAvatar, sizeClass = "w-5 h-5", textClass = "text-[9px]") {
+  const initial = (authorName || "A").charAt(0).toUpperCase();
+  const avatarUrl = authorAvatar || getAuthorAvatar(authorEmail);
+
+  if (avatarUrl) {
+    return `
+      <div class="${sizeClass} rounded-full bg-[#173057] text-white flex items-center justify-center font-bold ${textClass} flex-shrink-0 overflow-hidden ring-1 ring-black/10 shadow-xs">
+        <img src="${avatarUrl}" class="w-full h-full object-cover rounded-full" alt="${escapeHtml(authorName || 'Colaborador')}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+        <span style="display:none;" class="w-full h-full flex items-center justify-center ${textClass}">${initial}</span>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="${sizeClass} rounded-full bg-[#173057] text-white flex items-center justify-center font-bold ${textClass} flex-shrink-0 ring-1 ring-black/10 shadow-xs">
+      <span>${initial}</span>
+    </div>
+  `;
+}
+
+async function syncCardAuthorAvatar(cardId, avatarUrl) {
+  if (!supabaseClient || !cardId || !avatarUrl) return;
+  try {
+    await supabaseClient.from("cards").update({ author_avatar: avatarUrl }).eq("id", cardId);
+  } catch (e) {}
+}
+
+// ============================================================================
 // GESTÃO DE ADMINISTRADORES
 // ============================================================================
 async function loadAdminsList() {
@@ -577,14 +649,14 @@ function renderBoardsGrid() {
   const heroTitle = document.getElementById("dashboard-hero-title");
   if (heroTitle) {
     heroTitle.textContent = effectiveAdmin
-      ? "Murais da Equipe & Gestão"
+      ? "Murais de Interação & Marketing"
       : "Escolha um mural e participe!";
   }
   const heroDesc = document.getElementById("dashboard-hero-desc");
   if (heroDesc) {
     heroDesc.textContent = effectiveAdmin
-      ? "Acompanhe a participação da equipe nos murais abertos, gerencie os temas em debate e conduza as votações e feedbacks das iniciativas."
-      : "Seja bem-vindo(a)! Escolha um dos murais abertos abaixo para ver as novidades da equipe, compartilhar suas ideias com fotos e vídeos, interagir nos comentários e votar nos projetos em destaque.";
+      ? "Acompanhe as ações de marketing, interação e integração da empresa, gerencie as campanhas ativas e conduza as votações e feedbacks dos colaboradores."
+      : "Seja bem-vindo(a)! Escolha um dos murais abertos abaixo para acompanhar as ações de marketing e integração da empresa, compartilhar fotos, vídeos e ideias, interagir nos comentários e votar nas melhores iniciativas.";
   }
 
   // Botões de criar mural: visíveis apenas no modo Admin
@@ -604,8 +676,8 @@ function renderBoardsGrid() {
     }
     if (emptyDesc) {
       emptyDesc.textContent = effectiveAdmin
-        ? "Crie o primeiro mural colaborativo para a equipe começar a postar fotos, vídeos e ideias."
-        : "Nenhum mural aberto para participação no momento. Assim que a equipe disponibilizar um novo mural aberto, ele aparecerá aqui para você participar e postar suas ideias!";
+        ? "Crie o primeiro mural para lançar uma ação de marketing, evento ou campanha de interação para a equipe."
+        : "Nenhum mural aberto para participação no momento. Assim que o time de marketing disponibilizar uma nova ação ou mural, ele aparecerá aqui para você interagir e compartilhar seus momentos!";
     }
     return;
   }
@@ -1107,6 +1179,10 @@ function getBackgroundThemeCategory(bgType, bgValue) {
   return "dark";
 }
 
+function isLightBackground(bgType, bgValue) {
+  return getBackgroundThemeCategory(bgType, bgValue) === "light";
+}
+
 function applyBoardBackground(board) {
   const bgEl = document.getElementById("board-custom-bg");
   if (!bgEl) return;
@@ -1368,7 +1444,8 @@ async function saveBoardLayoutAndSort() {
     votes: "Mais votados",
     comments: "Mais comentados",
     "alpha-asc": "Alfabética (A-Z)",
-    "alpha-desc": "Alfabética (Z-A)"
+    "alpha-desc": "Alfabética (Z-A)",
+    random: "Aleatória / Randômica"
   };
   showToast(`Mural organizado: ${layoutLabels[selectedLayout]} • ${sortLabels[selectedSort]}!`, "success");
 }
@@ -1390,6 +1467,17 @@ async function loadCards(boardId, isSilent = false) {
     if (error) throw error;
 
     state.cards = (cards || []).map(c => {
+      if (c.author_avatar && c.author_email) {
+        cacheAuthorAvatar(c.author_email, c.author_avatar);
+      }
+      if (state.user && state.user.avatarUrl && c.author_email === state.user.email && !c.author_avatar) {
+        syncCardAuthorAvatar(c.id, state.user.avatarUrl);
+      }
+      (c.comments || []).forEach(cm => {
+        if (cm.author_avatar && cm.author_email) {
+          cacheAuthorAvatar(cm.author_email, cm.author_avatar);
+        }
+      });
       const userVoted = state.user && c.votes ? c.votes.some(v => (v.voter_email || v.user_email) === state.user.email) : false;
       const cardComments = (c.comments || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
       return {
@@ -1515,14 +1603,34 @@ function renderCardsList() {
     }
   };
 
-  if (state.keepPinnedTop !== false) {
-    const pinned = list.filter(c => (c.pinned || c.is_pinned));
-    const unpinned = list.filter(c => !(c.pinned || c.is_pinned));
-    pinned.sort(sortFn);
-    unpinned.sort(sortFn);
-    list = [...pinned, ...unpinned];
+  if (sort === "random") {
+    // Embaralha randomicamente (Fisher-Yates) toda vez que o usuário abre ou atualiza o mural
+    const shuffleArray = (arr) => {
+      const copy = [...arr];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    };
+
+    if (state.keepPinnedTop !== false) {
+      const pinned = list.filter(c => (c.pinned || c.is_pinned));
+      const unpinned = list.filter(c => !(c.pinned || c.is_pinned));
+      list = [...shuffleArray(pinned), ...shuffleArray(unpinned)];
+    } else {
+      list = shuffleArray(list);
+    }
   } else {
-    list.sort(sortFn);
+    if (state.keepPinnedTop !== false) {
+      const pinned = list.filter(c => (c.pinned || c.is_pinned));
+      const unpinned = list.filter(c => !(c.pinned || c.is_pinned));
+      pinned.sort(sortFn);
+      unpinned.sort(sortFn);
+      list = [...pinned, ...unpinned];
+    } else {
+      list.sort(sortFn);
+    }
   }
 
   if (list.length === 0) {
@@ -1538,14 +1646,14 @@ function renderCardsList() {
     const themeClass = `card-theme-${card.card_color || card.color_theme || 'white'}`;
 
     const cardEl = document.createElement("div");
-    cardEl.className = `masonry-item glass-card ${themeClass} rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between relative group animate-fade-in`;
+    cardEl.className = `masonry-item glass-card ${themeClass} rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between relative group animate-fade-in`;
 
     // Renderização de Mídia (Foto ou Vídeo)
     let mediaHtml = "";
     if (card.media_type === "image" && card.media_url) {
       mediaHtml = `
-        <div class="mt-2.5 rounded-xl overflow-hidden cursor-pointer max-h-52 sm:max-h-56 bg-black/5 flex items-center justify-center btn-zoom-media" data-url="${card.media_url}">
-          <img src="${card.media_url}" class="w-full h-auto object-cover max-h-52 sm:max-h-56 hover:scale-105 transition-transform duration-300" loading="lazy" alt="${escapeHtml(card.title)}">
+        <div class="mt-2 rounded-xl overflow-hidden cursor-pointer max-h-44 sm:max-h-48 bg-black/5 flex items-center justify-center btn-zoom-media" data-url="${card.media_url}">
+          <img src="${card.media_url}" class="w-full h-auto object-cover max-h-44 sm:max-h-48 hover:scale-105 transition-transform duration-300" loading="lazy" alt="${escapeHtml(card.title)}">
         </div>
       `;
     } else if (card.media_type === "youtube" && card.media_url) {
@@ -1573,10 +1681,13 @@ function renderCardsList() {
       const snippets = card.comments_preview.map(cm => `
         <div class="text-[11px] bg-black/5 hover:bg-black/10 rounded-xl p-2 transition-colors cursor-pointer btn-open-comments" data-id="${card.id}">
           <div class="flex items-center justify-between gap-1.5 mb-0.5">
-            <span class="font-subtitle-semibold text-gray-800 text-[10px] truncate">${escapeHtml(cm.author_name || 'Colaborador')}</span>
+            <div class="flex items-center gap-1.5 min-w-0">
+              ${renderAuthorAvatar(cm.author_email, cm.author_name, cm.author_avatar, "w-4 h-4", "text-[8px]")}
+              <span class="font-subtitle-semibold text-gray-800 text-[10px] truncate">${escapeHtml(cm.author_name || 'Colaborador')}</span>
+            </div>
             <span class="text-[9px] text-gray-600 flex-shrink-0">${formatDate(cm.created_at)}</span>
           </div>
-          <p class="text-gray-600 line-clamp-2 leading-tight">${escapeHtml(cm.comment_text || '')}</p>
+          <p class="text-gray-600 line-clamp-2 leading-tight pl-5.5">${escapeHtml(cm.comment_text || '')}</p>
         </div>
       `).join("");
 
@@ -1646,10 +1757,8 @@ function renderCardsList() {
 
       <!-- Rodapé do Card (Fixo) -->
       <div class="card-footer-section flex-shrink-0 pt-2 mt-auto border-t border-gray-100/80 flex items-center justify-between text-[11px] text-gray-600">
-        <div class="flex items-center gap-1.5 line-clamp-1">
-          <div class="w-4 h-4 rounded-full bg-[#173057] text-white flex items-center justify-center font-bold text-[8px] flex-shrink-0">
-            ${(card.author_name || "A").charAt(0).toUpperCase()}
-          </div>
+        <div class="flex items-center gap-1.5 line-clamp-1 min-w-0">
+          ${renderAuthorAvatar(card.author_email, card.author_name, card.author_avatar, "w-5 h-5", "text-[9px]")}
           <span class="font-body-medium text-gray-600 truncate text-[10px] sm:text-[11px]">${escapeHtml(card.author_name || 'Colaborador')}</span>
         </div>
 
@@ -1837,13 +1946,19 @@ async function handleCardFormSubmit(e) {
         media_type: mediaType
       };
       if (mediaUrl) updatePayload.media_url = mediaUrl;
+      if (state.user?.avatarUrl) updatePayload.author_avatar = state.user.avatarUrl;
 
-      const { error } = await supabaseClient.from("cards").update(updatePayload).eq("id", id);
+      let { error } = await supabaseClient.from("cards").update(updatePayload).eq("id", id);
+      if (error && (error.message?.includes("author_avatar") || error.code === "PGRST204")) {
+        delete updatePayload.author_avatar;
+        const retry = await supabaseClient.from("cards").update(updatePayload).eq("id", id);
+        error = retry.error;
+      }
       if (error) throw error;
       showToast("Card atualizado!", "success");
     } else {
       // Criação
-      const { error } = await supabaseClient.from("cards").insert([{
+      const insertPayload = {
         board_id: state.activeBoard.id,
         title: title,
         content: content,
@@ -1852,8 +1967,16 @@ async function handleCardFormSubmit(e) {
         media_type: mediaType,
         media_url: mediaUrl,
         author_name: state.user?.name || "Colaborador",
-        author_email: state.user?.email || MASTER_ADMIN
-      }]);
+        author_email: state.user?.email || MASTER_ADMIN,
+        author_avatar: state.user?.avatarUrl || ""
+      };
+
+      let { error } = await supabaseClient.from("cards").insert([insertPayload]);
+      if (error && (error.message?.includes("author_avatar") || error.code === "PGRST204")) {
+        delete insertPayload.author_avatar;
+        const retry = await supabaseClient.from("cards").insert([insertPayload]);
+        error = retry.error;
+      }
       if (error) throw error;
       showToast("Card criado no mural!", "success");
     }
@@ -2038,7 +2161,7 @@ async function openVotingModal() {
             ` : ''}
           </div>
           <span class="inline-flex items-center gap-1.5 text-[10px] text-gray-500 bg-white px-2 py-0.5 rounded-lg border border-gray-200 flex-shrink-0 shadow-xs">
-            <span class="w-4 h-4 rounded-full bg-[#173057] text-white flex items-center justify-center font-bold text-[8px]">${authorInitial}</span>
+            ${renderAuthorAvatar(card.author_email, card.author_name, card.author_avatar, "w-4 h-4", "text-[8px]")}
             <span class="font-body-medium text-gray-700 truncate max-w-[120px]">${escapeHtml(card.author_name || 'Colaborador')}</span>
           </span>
         </div>
@@ -2186,7 +2309,7 @@ async function renderVoteStats() {
           <div class="min-w-0">
             <span class="font-body-semibold text-gray-800 line-clamp-1">${escapeHtml(card.title)}</span>
             <div class="flex items-center gap-1 text-[10px] text-gray-400 font-body mt-0.5">
-              <span class="w-3.5 h-3.5 rounded-full bg-[#173057] text-white flex items-center justify-center font-bold text-[8px] flex-shrink-0">${authorInitial}</span>
+              ${renderAuthorAvatar(card.author_email, card.author_name, card.author_avatar, "w-4 h-4", "text-[8px]")}
               <span class="truncate">Por: ${escapeHtml(card.author_name || 'Colaborador')}</span>
             </div>
           </div>
@@ -2295,6 +2418,11 @@ async function loadComments(cardId, isSilent = false) {
       .order("created_at", { ascending: true });
 
     if (error) throw error;
+    (comments || []).forEach(cm => {
+      if (cm.author_avatar && cm.author_email) {
+        cacheAuthorAvatar(cm.author_email, cm.author_avatar);
+      }
+    });
     state.comments = comments || [];
     renderCommentsList();
   } catch (err) {
@@ -2318,10 +2446,8 @@ function renderCommentsList() {
     item.className = "p-3 bg-white rounded-xl border border-gray-100 shadow-sm text-xs";
     item.innerHTML = `
       <div class="flex items-center justify-between mb-1">
-        <div class="flex items-center gap-1.5">
-          <div class="w-5 h-5 rounded-full bg-[#173057] text-white flex items-center justify-center font-bold text-[9px]">
-            ${(c.author_name || "A").charAt(0).toUpperCase()}
-          </div>
+        <div class="flex items-center gap-2">
+          ${renderAuthorAvatar(c.author_email, c.author_name, c.author_avatar, "w-5 h-5", "text-[9px]")}
           <span class="font-body-semibold text-gray-700">${escapeHtml(c.author_name || 'Colaborador')}</span>
         </div>
         <div class="flex items-center gap-1">
@@ -2333,7 +2459,7 @@ function renderCommentsList() {
           ` : ''}
         </div>
       </div>
-      <p class="font-body text-gray-600 pl-6 leading-relaxed">${escapeHtml(c.comment_text || c.content)}</p>
+      <p class="font-body text-gray-600 pl-7 leading-relaxed">${escapeHtml(c.comment_text || c.content)}</p>
     `;
     container.appendChild(item);
   });
@@ -2354,12 +2480,20 @@ async function handleCommentSubmit(e) {
   if (!content || !state.activeCardForComments) return;
 
   try {
-    const { error } = await supabaseClient.from("comments").insert([{
+    const commentPayload = {
       card_id: state.activeCardForComments,
       comment_text: content,
       author_name: state.user?.name || "Colaborador",
-      author_email: state.user?.email || MASTER_ADMIN
-    }]);
+      author_email: state.user?.email || MASTER_ADMIN,
+      author_avatar: state.user?.avatarUrl || ""
+    };
+
+    let { error } = await supabaseClient.from("comments").insert([commentPayload]);
+    if (error && (error.message?.includes("author_avatar") || error.code === "PGRST204")) {
+      delete commentPayload.author_avatar;
+      const retry = await supabaseClient.from("comments").insert([commentPayload]);
+      error = retry.error;
+    }
     if (error) throw error;
     input.value = "";
     await loadComments(state.activeCardForComments, true);
