@@ -56,9 +56,10 @@ const state = {
 // PALETAS DE CORES & GRADIENTES (AZ & VARIADAS)
 // ============================================================================
 const AZ_GRADIENTS = [
-  // 2 Opções Oficiais AZ
-  { name: "AZ Corporate", value: "linear-gradient(135deg, #0A2334 0%, #173057 50%, #D75B36 100%)" },
-  { name: "AZ Pôr do Sol", value: "linear-gradient(135deg, #173057 0%, #D75B36 70%, #DC7B52 100%)" },
+  // Opções Oficiais AZ (Equilibradas, elegantes e confortáveis aos olhos)
+  { name: "AZ Corporate", value: "linear-gradient(135deg, #0A2334 0%, #173057 65%, #7a321f 100%)" },
+  { name: "AZ Pôr do Sol Suave", value: "linear-gradient(135deg, #0c1e2b 0%, #173057 55%, #4f2d24 100%)" },
+  { name: "AZ Noite & Cobre", value: "linear-gradient(135deg, #071520 0%, #11263d 70%, #3d2019 100%)" },
 
   // Opções Variadas Modernas
   { name: "Ocean Deep", value: "linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)" },
@@ -183,23 +184,48 @@ async function handleAuthenticatedUser(supabaseUser) {
   await loadAdminsList();
   renderUserInfo();
 
+  const isRealAdmin = !!(state.user?.isAdmin || state.user?.isMasterAdmin);
+
+  // Botões de criar mural: exclusivos para Administradores
+  const btnCreateHero = document.getElementById("btn-create-board-hero");
+  if (btnCreateHero) btnCreateHero.classList.toggle("hidden", !isRealAdmin);
+  const btnCreateEmpty = document.getElementById("btn-create-board-empty");
+  if (btnCreateEmpty) btnCreateEmpty.classList.toggle("hidden", !isRealAdmin);
+
   // Iniciar Realtime e Murais
   setupRealtimeWebsockets();
   await loadBoards();
 
-  // Verificar link direto de compartilhamento (?board=<id>)
+  // Redireciona diretamente para o interior do mural (usuário comum NUNCA acessa o painel de murais)
   await checkDirectBoardAccess();
 }
 
 // Acesso direto a um mural específico compartilhado
 async function checkDirectBoardAccess() {
   const urlParams = new URLSearchParams(window.location.search);
-  const targetBoardId = urlParams.get("board");
-  if (!targetBoardId) return;
+  let targetBoardId = urlParams.get("board");
+  if (!targetBoardId) {
+    targetBoardId = localStorage.getItem("az_board_pending_id");
+  }
+  localStorage.removeItem("az_board_pending_id");
+
+  const isRealAdmin = !!(state.user?.isAdmin || state.user?.isMasterAdmin);
+
+  // Se for usuário comum e não tiver mural especificado na URL, abre automaticamente o primeiro mural disponível
+  if (!targetBoardId && !isRealAdmin && state.boards.length > 0) {
+    targetBoardId = state.boards[0].id;
+  }
+
+  if (!targetBoardId) {
+    if (!isRealAdmin) {
+      document.getElementById("view-dashboard")?.classList.add("hidden");
+    }
+    return;
+  }
 
   let target = state.boards.find(b => b.id === targetBoardId);
 
-  // Se não estiver na lista geral, busca direto no Supabase
+  // Se não estiver na lista geral carregada, busca direto no Supabase
   if (!target && supabaseClient) {
     try {
       const { data, error } = await supabaseClient
@@ -222,17 +248,8 @@ async function checkDirectBoardAccess() {
   if (target) {
     state.isDirectBoardAccess = true;
     openBoard(target);
-
-    // Se o colaborador não for admin, oculta acesso ao painel geral de murais
-    if (!state.user?.isAdmin && !state.user?.isMasterAdmin) {
-      document.getElementById("btn-back-to-dashboard")?.classList.add("hidden");
-      const headerLogo = document.getElementById("header-logo-home");
-      if (headerLogo) {
-        headerLogo.classList.remove("cursor-pointer");
-        headerLogo.title = "AZ Board - " + target.title;
-        headerLogo.onclick = (e) => { e.preventDefault(); };
-      }
-    }
+  } else if (!isRealAdmin && state.boards.length > 0) {
+    openBoard(state.boards[0]);
   } else {
     showToast("Mural compartilhado não encontrado.", "error");
   }
@@ -259,10 +276,19 @@ async function signInWithGoogle() {
   if (!supabaseClient) return;
   showLoader(true);
   try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetBoardId = urlParams.get("board");
+    if (targetBoardId) {
+      localStorage.setItem("az_board_pending_id", targetBoardId);
+    }
+    const redirectTarget = targetBoardId 
+      ? `${window.location.origin}/?board=${targetBoardId}` 
+      : window.location.origin;
+
     const { error } = await supabaseClient.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: window.location.origin
+        redirectTo: redirectTarget
       }
     });
     if (error) throw error;
@@ -638,8 +664,7 @@ function setViewMode(mode) {
     const btnStats = document.getElementById("btn-stats-board");
     const btnSettings = document.getElementById("btn-board-settings");
 
-    const btnFabVote = document.getElementById("btn-fab-vote-board");
-    if (btnFabVote) btnFabVote.classList.toggle("hidden", !state.activeBoard.vote_mode);
+    updateFabVoteButton();
     if (voteBadge) voteBadge.classList.toggle("hidden", !state.activeBoard.vote_mode);
 
     if (btnVote) btnVote.classList.toggle("hidden", !state.activeBoard.vote_mode || !effectiveAdmin);
@@ -725,17 +750,28 @@ function openBoard(board) {
     history.replaceState(null, "", newUrl.toString());
   } catch(e) {}
 
-  // Se o usuário não for admin e acessou via link compartilhado direto, oculta botão de voltar
+  // Se o usuário não for admin, oculta botão de voltar aos murais SEMPRE
   const btnBack = document.getElementById("btn-back-to-dashboard");
   if (btnBack) {
-    const isRestrictedNonAdmin = state.isDirectBoardAccess && !isRealAdmin;
-    btnBack.classList.toggle("hidden", isRestrictedNonAdmin);
+    btnBack.classList.toggle("hidden", !isRealAdmin);
+  }
+  const headerLogo = document.getElementById("header-logo-home");
+  if (headerLogo) {
+    if (!isRealAdmin) {
+      headerLogo.classList.remove("cursor-pointer");
+      headerLogo.onclick = (e) => { e.preventDefault(); };
+    } else {
+      headerLogo.classList.add("cursor-pointer");
+      headerLogo.onclick = showDashboardView;
+    }
   }
 
   // Configurações visuais do mural ativo
   document.getElementById("board-view-icon").textContent = board.icon || "📌";
-  document.getElementById("board-view-title").textContent = board.title;
-  document.getElementById("board-view-desc").textContent = board.description || "";
+  const descEl = document.getElementById("board-view-desc");
+  const descBox = document.getElementById("board-view-desc-box");
+  if (descEl) descEl.textContent = board.description || "";
+  if (descBox) descBox.classList.toggle("hidden", !board.description || !board.description.trim());
 
   const voteBadge = document.getElementById("board-view-vote-badge");
   const btnFabVote = document.getElementById("btn-fab-vote-board");
@@ -746,7 +782,7 @@ function openBoard(board) {
   const effectiveAdmin = isUserAdmin();
 
   // Votação: Botão flutuante aparente ao lado do novo card para todos quando ativa
-  if (btnFabVote) btnFabVote.classList.toggle("hidden", !board.vote_mode);
+  updateFabVoteButton();
   if (voteBadge) voteBadge.classList.toggle("hidden", !board.vote_mode);
 
   // Apuração e Ações na gaveta admin
@@ -764,6 +800,9 @@ function openBoard(board) {
 }
 
 function showDashboardView() {
+  const isRealAdmin = !!(state.user?.isAdmin || state.user?.isMasterAdmin);
+  if (!isRealAdmin) return;
+
   state.activeBoard = null;
   state.isDirectBoardAccess = false;
   document.getElementById("view-board").classList.add("hidden");
@@ -954,7 +993,7 @@ async function loadCards(boardId, isSilent = false) {
   try {
     const { data: cards, error } = await supabaseClient
       .from("cards")
-      .select("*, votes(id, voter_email), comments(id)")
+      .select("*, votes(id, voter_email), comments(id, author_name, author_email, comment_text, created_at)")
       .eq("board_id", boardId)
       .order("pinned", { ascending: false })
       .order("created_at", { ascending: false });
@@ -964,19 +1003,50 @@ async function loadCards(boardId, isSilent = false) {
 
     state.cards = (cards || []).map(c => {
       const userVoted = state.user && c.votes ? c.votes.some(v => (v.voter_email || v.user_email) === state.user.email) : false;
+      const cardComments = (c.comments || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
       return {
         ...c,
         vote_count: c.votes ? c.votes.length : 0,
-        comment_count: c.comments ? c.comments.length : 0,
+        comment_count: cardComments.length,
+        comments_preview: cardComments.slice(0, 3),
         has_voted: userVoted
       };
     });
 
+    updateFabVoteButton();
     renderCardsList();
   } catch (err) {
     if (!isSilent) showLoader(false);
     console.error("Erro ao carregar cards:", err);
   }
+}
+
+function updateFabVoteButton() {
+  const btnFabVote = document.getElementById("btn-fab-vote-board");
+  if (!btnFabVote) return;
+
+  if (!state.activeBoard || !state.activeBoard.vote_mode) {
+    btnFabVote.classList.add("hidden");
+    return;
+  }
+
+  const hasVoted = state.cards && state.cards.some(c => c.has_voted);
+  if (hasVoted) {
+    btnFabVote.innerHTML = `
+      <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-200 flex-shrink-0"></i>
+      <span>Voto Registrado (Alterar)</span>
+    `;
+    btnFabVote.className = "pl-4 pr-5 py-3.5 rounded-full bg-[#0A2334] hover:bg-[#173057] text-white font-subtitle-semibold text-sm shadow-2xl shadow-black/40 flex items-center gap-2.5 hover:scale-105 active:scale-95 transition-all border border-emerald-400/40 ring-2 ring-emerald-400/30 cursor-pointer";
+    btnFabVote.title = "Seu voto está computado! Clique para alterar sua escolha se desejar.";
+  } else {
+    btnFabVote.innerHTML = `
+      <i data-lucide="check-square" class="w-4 h-4 flex-shrink-0"></i>
+      <span>Votar na Enquete</span>
+    `;
+    btnFabVote.className = "pl-4 pr-5 py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-subtitle-semibold text-sm shadow-2xl shadow-black/40 flex items-center gap-2.5 hover:scale-105 active:scale-95 transition-all border border-white/20 cursor-pointer";
+    btnFabVote.title = "Votar na Enquete do Mural";
+  }
+  if (window.lucide) lucide.createIcons();
 }
 
 function renderCardsList() {
@@ -1016,31 +1086,62 @@ function renderCardsList() {
     const themeClass = `card-theme-${card.card_color || card.color_theme || 'white'}`;
 
     const cardEl = document.createElement("div");
-    cardEl.className = `masonry-item glass-card ${themeClass} rounded-2xl p-4 sm:p-5 flex flex-col justify-between relative group animate-fade-in`;
+    cardEl.className = `masonry-item glass-card ${themeClass} rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between relative group animate-fade-in`;
 
     // Renderização de Mídia (Foto ou Vídeo)
     let mediaHtml = "";
     if (card.media_type === "image" && card.media_url) {
       mediaHtml = `
-        <div class="mt-3 rounded-xl overflow-hidden cursor-pointer max-h-72 bg-black/5 flex items-center justify-center btn-zoom-media" data-url="${card.media_url}">
-          <img src="${card.media_url}" class="w-full h-auto object-cover max-h-72 hover:scale-105 transition-transform duration-300" loading="lazy" alt="${escapeHtml(card.title)}">
+        <div class="mt-2.5 rounded-xl overflow-hidden cursor-pointer max-h-52 sm:max-h-56 bg-black/5 flex items-center justify-center btn-zoom-media" data-url="${card.media_url}">
+          <img src="${card.media_url}" class="w-full h-auto object-cover max-h-52 sm:max-h-56 hover:scale-105 transition-transform duration-300" loading="lazy" alt="${escapeHtml(card.title)}">
         </div>
       `;
     } else if (card.media_type === "youtube" && card.media_url) {
       const ytId = extractYouTubeId(card.media_url);
       if (ytId) {
         mediaHtml = `
-          <div class="mt-3 rounded-xl overflow-hidden aspect-video bg-black">
+          <div class="mt-2.5 rounded-xl overflow-hidden aspect-video bg-black">
             <iframe class="w-full h-full" src="https://www.youtube.com/embed/${ytId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
           </div>
         `;
       }
     } else if (card.media_type === "video" && card.media_url) {
       mediaHtml = `
-        <div class="mt-3 rounded-xl overflow-hidden aspect-video bg-black/10 flex items-center justify-center">
-          <a href="${card.media_url}" target="_blank" class="px-3 py-2 bg-white rounded-xl text-xs font-subtitle-semibold text-[#0A2334] shadow flex items-center gap-1.5 hover:bg-gray-50">
-            <i data-lucide="play-circle" class="w-4 h-4 text-[#D75B36]"></i> Assistir no Google Drive
+        <div class="mt-2.5 rounded-xl overflow-hidden aspect-video bg-black/10 flex items-center justify-center">
+          <a href="${card.media_url}" target="_blank" class="px-2.5 py-1.5 bg-white rounded-xl text-xs font-subtitle-semibold text-[#0A2334] shadow flex items-center gap-1.5 hover:bg-gray-50">
+            <i data-lucide="play-circle" class="w-3.5 h-3.5 text-[#D75B36]"></i> Assistir no Google Drive
           </a>
+        </div>
+      `;
+    }
+
+    // Prévia de comentários (até 3 primeiros comentários)
+    let commentsPreviewHtml = "";
+    if (card.comments_preview && card.comments_preview.length > 0) {
+      const snippets = card.comments_preview.map(cm => `
+        <div class="text-[11px] bg-black/5 hover:bg-black/10 rounded-xl p-2 transition-colors cursor-pointer btn-open-comments" data-id="${card.id}">
+          <div class="flex items-center justify-between gap-1.5 mb-0.5">
+            <span class="font-subtitle-semibold text-gray-800 text-[10px] truncate">${escapeHtml(cm.author_name || 'Colaborador')}</span>
+            <span class="text-[9px] text-gray-600 flex-shrink-0">${formatDate(cm.created_at)}</span>
+          </div>
+          <p class="text-gray-600 line-clamp-2 leading-tight">${escapeHtml(cm.comment_text || '')}</p>
+        </div>
+      `).join("");
+
+      const moreCommentsBtn = card.comment_count > 3
+        ? `<button type="button" class="btn-open-comments text-left text-[11px] font-subtitle-semibold text-[#D75B36] hover:text-[#b84523] pt-0.5 px-1 flex items-center gap-1 cursor-pointer transition-colors" data-id="${card.id}">
+             <span>Ver todos os ${card.comment_count} comentários</span>
+             <i data-lucide="arrow-right" class="w-3 h-3"></i>
+           </button>`
+        : `<button type="button" class="btn-open-comments text-left text-[10px] font-subtitle-semibold text-gray-600 hover:text-[#0A2334] pt-0.5 px-1 flex items-center gap-1 cursor-pointer transition-colors" data-id="${card.id}">
+             <i data-lucide="message-square-plus" class="w-3 h-3 text-[#D75B36]"></i>
+             <span>Adicionar comentário...</span>
+           </button>`;
+
+      commentsPreviewHtml = `
+        <div class="mt-2.5 pt-2 border-t border-gray-100/90 flex flex-col gap-1.5">
+          ${snippets}
+          ${moreCommentsBtn}
         </div>
       `;
     }
@@ -1048,12 +1149,17 @@ function renderCardsList() {
     cardEl.innerHTML = `
       <!-- Cabeçalho do Card -->
       <div class="flex items-start justify-between gap-2">
-        <div class="flex items-center gap-2">
-          ${(card.pinned || card.is_pinned) ? '<i data-lucide="pin" class="w-3.5 h-3.5 text-[#D75B36] flex-shrink-0 fill-[#D75B36]"></i>' : ''}
-          <h4 class="font-title text-sm text-[#0A2334] leading-snug font-semibold">${escapeHtml(card.title)}</h4>
+        <div class="flex items-center gap-2 min-w-0 flex-wrap">
+          ${(card.pinned || card.is_pinned) ? '<i data-lucide="pin" class="w-3.5 h-3.5 text-[#D75B36] flex-shrink-0 fill-[#D75B36]" title="Fixado no Topo"></i>' : ''}
+          <h4 class="font-title text-xs sm:text-sm text-[#0A2334] leading-snug font-semibold line-clamp-2">${escapeHtml(card.title)}</h4>
+          ${card.has_voted ? `
+            <span class="px-2 py-0.5 rounded-full text-[9px] font-subtitle-semibold bg-emerald-600 text-white font-bold flex items-center gap-1 shadow-xs flex-shrink-0" title="Você votou neste card na enquete">
+              <i data-lucide="check" class="w-3 h-3 stroke-[2.5]"></i> Seu Voto
+            </span>
+          ` : ''}
         </div>
         ${isOwnerOrAdmin ? `
-          <div class="relative group/menu">
+          <div class="relative group/menu flex-shrink-0">
             <button type="button" class="p-1 text-gray-400 hover:text-gray-600 rounded-lg">
               <i data-lucide="more-horizontal" class="w-4 h-4"></i>
             </button>
@@ -1075,25 +1181,28 @@ function renderCardsList() {
       </div>
 
       <!-- Conteúdo de Texto -->
-      ${card.content ? `<p class="font-body text-xs text-gray-700 mt-2 whitespace-pre-line leading-relaxed">${escapeHtml(card.content)}</p>` : ''}
+      ${card.content ? `<p class="font-body text-[11px] sm:text-xs text-gray-700 mt-1.5 whitespace-pre-line leading-relaxed">${escapeHtml(card.content)}</p>` : ''}
 
       <!-- Mídia -->
       ${mediaHtml}
 
+      <!-- Prévia de Comentários Inline -->
+      ${commentsPreviewHtml}
+
       <!-- Rodapé do Card (Autor e Comentários) -->
-      <div class="pt-3 mt-3 border-t border-gray-100/80 flex items-center justify-between text-[11px] text-gray-400">
+      <div class="pt-2.5 mt-2.5 border-t border-gray-100/80 flex items-center justify-between text-[11px] text-gray-600">
         <div class="flex items-center gap-1.5 line-clamp-1">
-          <div class="w-5 h-5 rounded-full bg-[#173057] text-white flex items-center justify-center font-bold text-[9px] flex-shrink-0">
+          <div class="w-4 h-4 rounded-full bg-[#173057] text-white flex items-center justify-center font-bold text-[8px] flex-shrink-0">
             ${(card.author_name || "A").charAt(0).toUpperCase()}
           </div>
-          <span class="font-body-medium text-gray-600 truncate">${escapeHtml(card.author_name || 'Colaborador')}</span>
+          <span class="font-body-medium text-gray-600 truncate text-[10px] sm:text-[11px]">${escapeHtml(card.author_name || 'Colaborador')}</span>
         </div>
 
         <div class="flex items-center gap-2 flex-shrink-0">
           <!-- Comentários -->
-          <button type="button" class="btn-open-comments flex items-center gap-1.5 text-gray-500 hover:text-[#0A2334] px-2 py-1 rounded-lg bg-gray-50 border border-gray-100 hover:border-gray-200 transition-all" data-id="${card.id}" title="Ver Comentários">
+          <button type="button" class="btn-open-comments flex items-center gap-1.5 text-gray-600 hover:text-[#0A2334] px-2 py-1 rounded-lg bg-gray-50 border border-gray-100 hover:border-gray-200 transition-all cursor-pointer" data-id="${card.id}" title="${card.comment_count > 0 ? 'Ver comentários' : 'Adicionar comentário'}">
             <i data-lucide="message-square" class="w-3.5 h-3.5 text-[#D75B36]"></i>
-            <span class="font-subtitle-semibold text-xs text-gray-600">${card.comment_count}</span>
+            <span class="font-subtitle-semibold text-xs text-gray-600">${card.comment_count > 0 ? card.comment_count : 'Comentar'}</span>
           </button>
         </div>
       </div>
@@ -1356,7 +1465,7 @@ async function handleCardVoteClick(cardId) {
   }
 }
 
-function openVotingModal() {
+async function openVotingModal() {
   if (!state.user) {
     showToast("Faça login para votar.", "error");
     return;
@@ -1369,17 +1478,72 @@ function openVotingModal() {
   const container = document.getElementById("vote-options-list");
   if (!container || !state.cards) return;
 
+  // Busca se o usuário já votou neste mural
+  let currentVotedCardId = null;
+  if (supabaseClient && state.activeBoard) {
+    try {
+      const { data: userVote } = await supabaseClient
+        .from("votes")
+        .select("card_id")
+        .eq("board_id", state.activeBoard.id)
+        .eq("voter_email", state.user.email)
+        .maybeSingle();
+      if (userVote) {
+        currentVotedCardId = userVote.card_id;
+      }
+    } catch (e) {
+      console.warn("Erro ao carregar voto do usuário:", e);
+    }
+  }
+
   container.innerHTML = "";
 
+  // Mensagem/aviso no topo do modal se o usuário já tiver votado
+  const noticeEl = document.getElementById("vote-modal-notice");
+  if (noticeEl) {
+    if (currentVotedCardId) {
+      noticeEl.innerHTML = `
+        <div class="mb-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2.5 text-xs text-emerald-800 animate-fade-in">
+          <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600 flex-shrink-0"></i>
+          <div>
+            <span class="font-subtitle-semibold font-bold">Você já votou nesta enquete!</span>
+            <p class="text-[11px] text-emerald-700 mt-0.5">Seu voto atual está destacado abaixo. Para alterar seu voto, selecione outro card e clique em "Alterar Meu Voto".</p>
+          </div>
+        </div>
+      `;
+      noticeEl.classList.remove("hidden");
+    } else {
+      noticeEl.innerHTML = "";
+      noticeEl.classList.add("hidden");
+    }
+  }
+
+  const btnSubmitVote = document.getElementById("btn-submit-vote");
+  if (btnSubmitVote) {
+    btnSubmitVote.textContent = currentVotedCardId ? "Alterar Meu Voto" : "Confirmar Meu Voto";
+  }
+
   state.cards.forEach(card => {
+    const isCurrentVote = card.id === currentVotedCardId;
     const authorInitial = (card.author_name || "A").charAt(0).toUpperCase();
     const opt = document.createElement("label");
-    opt.className = "flex items-center gap-3 p-3 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-200 cursor-pointer transition-all";
+    opt.className = `flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+      isCurrentVote 
+        ? 'bg-emerald-50/70 border-emerald-500 ring-2 ring-emerald-500/20 shadow-sm' 
+        : 'bg-gray-50 hover:bg-gray-100 border-gray-200'
+    }`;
     opt.innerHTML = `
-      <input type="radio" name="vote_selected_card" value="${card.id}" class="w-4 h-4 text-emerald-600 focus:ring-emerald-500">
+      <input type="radio" name="vote_selected_card" value="${card.id}" ${isCurrentVote ? 'checked' : ''} class="w-4 h-4 text-emerald-600 focus:ring-emerald-500">
       <div class="flex-1 min-w-0">
         <div class="flex items-center justify-between gap-2">
-          <p class="font-title text-xs text-[#0A2334] font-semibold truncate">${escapeHtml(card.title)}</p>
+          <div class="flex items-center gap-2 truncate">
+            <p class="font-title text-xs text-[#0A2334] font-semibold truncate">${escapeHtml(card.title)}</p>
+            ${isCurrentVote ? `
+              <span class="px-2 py-0.5 rounded-full text-[9px] font-subtitle-semibold bg-emerald-600 text-white font-bold flex items-center gap-1 shadow-xs flex-shrink-0">
+                <i data-lucide="check" class="w-3 h-3 stroke-[2.5]"></i> Seu Voto Atual
+              </span>
+            ` : ''}
+          </div>
           <span class="inline-flex items-center gap-1.5 text-[10px] text-gray-500 bg-white px-2 py-0.5 rounded-lg border border-gray-200 flex-shrink-0 shadow-xs">
             <span class="w-4 h-4 rounded-full bg-[#173057] text-white flex items-center justify-center font-bold text-[8px]">${authorInitial}</span>
             <span class="font-body-medium text-gray-700 truncate max-w-[120px]">${escapeHtml(card.author_name || 'Colaborador')}</span>
@@ -1391,6 +1555,7 @@ function openVotingModal() {
     container.appendChild(opt);
   });
 
+  if (window.lucide) lucide.createIcons();
   openModal("modal-vote");
 }
 
@@ -1413,7 +1578,6 @@ async function submitEnqueteVote() {
   showLoader(true);
   try {
     // Remove votos anteriores do usuário neste mural para garantir voto único na enquete
-    const cardIds = state.cards.map(c => c.id);
     await supabaseClient.from("votes").delete().match({ board_id: state.activeBoard.id, voter_email: state.user.email });
 
     // Insere o novo voto
@@ -1425,10 +1589,10 @@ async function submitEnqueteVote() {
     if (error) throw error;
 
     closeModal("modal-vote");
-    showToast("Seu voto oficial na enquete foi confirmado!", "success");
+    showToast("Seu voto oficial na enquete foi registrado!", "success");
     if (state.activeBoard) await loadCards(state.activeBoard.id, true);
   } catch (err) {
-    showToast("Erro ao confirmar voto: " + err.message, "error");
+    showToast("Erro ao registrar voto: " + err.message, "error");
   } finally {
     showLoader(false);
   }
@@ -1444,13 +1608,48 @@ function openAdminVoteStatsModal() {
   openModal("modal-vote-stats");
 }
 
-function renderVoteStats() {
+async function renderVoteStats() {
   const canvas = document.getElementById("vote-chart-canvas");
   const rankingsContainer = document.getElementById("vote-rankings-table");
+  const votersBreakdownContainer = document.getElementById("vote-voters-breakdown");
+  const totalVotersBadge = document.getElementById("vote-stats-total-voters");
   if (!canvas || !state.cards) return;
 
+  // Carrega todos os votos deste mural do Supabase para apuração detalhada
+  let allVotes = [];
+  if (supabaseClient && state.activeBoard) {
+    try {
+      const { data } = await supabaseClient
+        .from("votes")
+        .select("*")
+        .eq("board_id", state.activeBoard.id);
+      if (data) allVotes = data;
+    } catch(e) {
+      console.warn("Erro ao carregar lista de votantes:", e);
+    }
+  }
+
+  // Agrupa votos por card_id
+  const votesByCard = {};
+  allVotes.forEach(v => {
+    if (!votesByCard[v.card_id]) votesByCard[v.card_id] = [];
+    votesByCard[v.card_id].push(v);
+  });
+
+  if (totalVotersBadge) {
+    totalVotersBadge.textContent = `${allVotes.length} ${allVotes.length === 1 ? 'voto registrado' : 'votos registrados'}`;
+  }
+
   // Ordenar por votos
-  const sorted = [...state.cards].sort((a, b) => b.vote_count - a.vote_count);
+  const sorted = [...state.cards].map(c => {
+    const cardVotes = votesByCard[c.id] || [];
+    return {
+      ...c,
+      vote_count: cardVotes.length,
+      voters: cardVotes
+    };
+  }).sort((a, b) => b.vote_count - a.vote_count);
+
   const labels = sorted.slice(0, 8).map(c => c.title.length > 20 ? c.title.substring(0, 18) + '...' : c.title);
   const data = sorted.slice(0, 8).map(c => c.vote_count);
 
@@ -1504,6 +1703,55 @@ function renderVoteStats() {
       rankingsContainer.appendChild(row);
     });
   }
+
+  // Relação Detalhada: Quem votou em quem
+  if (votersBreakdownContainer) {
+    votersBreakdownContainer.innerHTML = "";
+    const cardsWithVotes = sorted.filter(c => c.vote_count > 0);
+    if (cardsWithVotes.length === 0) {
+      votersBreakdownContainer.innerHTML = `
+        <div class="p-4 text-center text-xs text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+          Nenhum voto foi registrado ainda nesta enquete.
+        </div>
+      `;
+    } else {
+      cardsWithVotes.forEach(card => {
+        const item = document.createElement("div");
+        item.className = "p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs";
+        
+        const votersListHtml = card.voters.map(v => {
+          const email = v.voter_email || "";
+          let vName = email.split("@")[0].replace(/\./g, " ");
+          vName = vName.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+          const initial = vName.charAt(0).toUpperCase();
+          return `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-gray-200 shadow-xs text-[11px] font-body">
+              <span class="w-4 h-4 rounded-full bg-[#173057] text-white flex items-center justify-center font-bold text-[8px] flex-shrink-0">${initial}</span>
+              <span class="font-semibold text-gray-800">${escapeHtml(vName)}</span>
+              <span class="text-gray-400 text-[10px]">(${escapeHtml(email)})</span>
+            </span>
+          `;
+        }).join("");
+
+        item.innerHTML = `
+          <div class="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-gray-200">
+            <span class="font-title text-xs text-[#0A2334] font-semibold truncate">${escapeHtml(card.title)}</span>
+            <span class="px-2 py-0.5 rounded-md bg-[#D75B36] text-white font-bold text-[10px] flex-shrink-0">
+              ${card.vote_count} ${card.vote_count === 1 ? 'voto' : 'votos'}
+            </span>
+          </div>
+          <div class="flex flex-wrap gap-1.5">
+            ${votersListHtml}
+          </div>
+        `;
+        votersBreakdownContainer.appendChild(item);
+      });
+    }
+  }
+
+  // Atualiza cache de apuração para exportação CSV completa
+  state.cachedVoteBreakdown = sorted;
+  if (window.lucide) lucide.createIcons();
 }
 
 function exportVoteChartImage() {
@@ -1517,19 +1765,19 @@ function exportVoteChartImage() {
 }
 
 function exportVotesCSV() {
-  if (!state.cards) return;
-  let csv = "Posicao,Titulo do Card,Autor,Votos\n";
-  const sorted = [...state.cards].sort((a, b) => b.vote_count - a.vote_count);
-  sorted.forEach((c, idx) => {
-    csv += `"${idx + 1}","${c.title.replace(/"/g, '""')}","${c.author_name || ''}","${c.vote_count}"\n`;
+  const list = state.cachedVoteBreakdown || state.cards || [];
+  let csv = "Posicao,Titulo do Card,Autor do Card,Total de Votos,Quem Votou (Emails)\n";
+  list.forEach((c, idx) => {
+    const votersStr = (c.voters || []).map(v => v.voter_email).join("; ");
+    csv += `"${idx + 1}","${(c.title || '').replace(/"/g, '""')}","${(c.author_name || '').replace(/"/g, '""')}","${c.vote_count || 0}","${votersStr}"\n`;
   });
 
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = `votos_${state.activeBoard?.title || 'mural'}.csv`;
+  link.download = `apuracao_votos_${state.activeBoard?.title || 'mural'}.csv`;
   link.click();
-  showToast("CSV de apuração exportado!", "success");
+  showToast("CSV de apuração detalhado exportado!", "success");
 }
 
 // ============================================================================
