@@ -186,25 +186,41 @@ async function handleAuthenticatedUser(supabaseUser) {
   }
   const avatarUrl = supabaseUser.user_metadata?.avatar_url || null;
 
+  const isMaster = email.toLowerCase() === MASTER_ADMIN.toLowerCase();
+  const cachedAdmin = localStorage.getItem("az_admin_" + email.toLowerCase()) === "true";
+
   state.user = {
     id: supabaseUser.id,
     email: email,
     name: name,
     avatarUrl: avatarUrl,
-    isAdmin: email === MASTER_ADMIN,
-    isMasterAdmin: email === MASTER_ADMIN
+    isAdmin: isMaster || cachedAdmin,
+    isMasterAdmin: isMaster
   };
+
+  // Garante cabeçalho superior tradicional oculto para design limpo idêntico ao interior do mural
+  const mainHeader = document.getElementById("main-app-header");
+  if (mainHeader) mainHeader.classList.add("hidden");
+
+  // Garante fundo branco na tela inicial
+  const bgInit = document.getElementById("board-custom-bg");
+  if (bgInit) bgInit.style.background = "#FFFFFF";
 
   // Alternar telas imediatamente para transição instantânea
   document.getElementById("view-login").classList.add("hidden");
   document.getElementById("app-shell").classList.remove("hidden");
   renderUserInfo();
 
+  // Exibe a aba da gaveta admin imediatamente na tela inicial se for admin
+  updateAdminDrawerContext();
+
   // Carregar lista de administradores do banco e re-renderizar
   await loadAdminsList();
   renderUserInfo();
 
-  const isRealAdmin = !!(state.user?.isAdmin || state.user?.isMasterAdmin);
+  if (state.user?.isAdmin) {
+    localStorage.setItem("az_admin_" + email.toLowerCase(), "true");
+  }
 
   // Iniciar Realtime e Murais
   setupRealtimeWebsockets();
@@ -349,6 +365,19 @@ function renderUserInfo() {
     }
   }
 
+  // Atualiza chip do usuário no Hero do Dashboard
+  const dashName = document.getElementById("dashboard-user-name");
+  const dashAvatar = document.getElementById("dashboard-avatar-container");
+  if (dashName) dashName.textContent = (state.user.name || "Usuário").split(" ")[0];
+  if (dashAvatar) {
+    if (state.user.avatarUrl) {
+      dashAvatar.innerHTML = `<img src="${state.user.avatarUrl}" class="w-full h-full object-cover" alt="${state.user.name}">`;
+    } else {
+      const initial = (state.user.name || "U").charAt(0).toUpperCase();
+      dashAvatar.innerHTML = `<span id="dashboard-avatar-initials">${initial}</span>`;
+    }
+  }
+
   const isAdm = state.user.isAdmin || state.user.isMasterAdmin;
   if (adminBadge) adminBadge.classList.toggle("hidden", !isAdm);
   if (btnManageAdmins) btnManageAdmins.classList.toggle("hidden", !isAdm);
@@ -363,7 +392,7 @@ async function loadAdminsList() {
     const { data, error } = await supabaseClient.from("admins").select("email");
     if (!error && data) {
       const dbAdmins = data.map(a => a.email.toLowerCase().trim());
-      state.admins = Array.from(new Set([MASTER_ADMIN, ...dbAdmins]));
+      state.admins = Array.from(new Set([MASTER_ADMIN.toLowerCase(), ...dbAdmins]));
       if (state.user) {
         state.user.isAdmin = state.admins.includes(state.user.email.toLowerCase());
       }
@@ -371,6 +400,8 @@ async function loadAdminsList() {
   } catch (err) {
     console.warn("Aviso ao carregar admins:", err);
   }
+  // Garante atualização e visibilidade imediata da gaveta admin
+  updateAdminDrawerContext();
 }
 
 function openAdminManagementModal() {
@@ -542,6 +573,20 @@ function renderBoardsGrid() {
 
   const effectiveAdmin = isUserAdmin();
 
+  // Ajusta título e descrição de boas-vindas no Hero conforme o perfil do usuário
+  const heroTitle = document.getElementById("dashboard-hero-title");
+  if (heroTitle) {
+    heroTitle.textContent = effectiveAdmin
+      ? "Gestão de Murais Colaborativos"
+      : "Murais Colaborativos";
+  }
+  const heroDesc = document.getElementById("dashboard-hero-desc");
+  if (heroDesc) {
+    heroDesc.textContent = effectiveAdmin
+      ? "Gerencie os murais da organização, acompanhe as contribuições da equipe e conduza as votações e feedbacks das iniciativas."
+      : "Explore os murais ativos da equipe, compartilhe ideias com fotos e vídeos, envie feedbacks e vote nas iniciativas corporativas.";
+  }
+
   // Botões de criar mural: visíveis apenas no modo Admin
   if (btnCreateHero) btnCreateHero.classList.toggle("hidden", !effectiveAdmin);
   if (btnCreateEmpty) btnCreateEmpty.classList.toggle("hidden", !effectiveAdmin);
@@ -569,7 +614,7 @@ function renderBoardsGrid() {
 
   visibleBoards.forEach(board => {
     const cardEl = document.createElement("div");
-    cardEl.className = "glass-card rounded-2xl overflow-hidden border border-gray-100 flex flex-col cursor-pointer group hover:shadow-lg transition-all relative";
+    cardEl.className = "rounded-2xl overflow-hidden border border-gray-200/90 shadow-sm flex flex-col cursor-pointer group hover:shadow-xl hover:-translate-y-0.5 transition-all relative bg-white";
     
     // Background header
     let bgStyle = "background: linear-gradient(135deg, #0A2334 0%, #173057 100%);";
@@ -988,9 +1033,9 @@ function showDashboardView() {
   document.getElementById("view-board").classList.add("hidden");
   document.getElementById("view-dashboard").classList.remove("hidden");
 
-  // Restaura cabeçalho superior padrão
+  // Mantém cabeçalho tradicional oculto para design limpo idêntico ao interior do mural
   const mainHeader = document.getElementById("main-app-header");
-  if (mainHeader) mainHeader.classList.remove("hidden");
+  if (mainHeader) mainHeader.classList.add("hidden");
 
   // Limpa o query param ?board da URL
   try {
@@ -1002,7 +1047,7 @@ function showDashboardView() {
   // Restaura fundo padrão
   const bgEl = document.getElementById("board-custom-bg");
   if (bgEl) {
-    bgEl.style.background = "linear-gradient(135deg, #0A2334 0%, #173057 100%)";
+    bgEl.style.background = "#FFFFFF";
   }
 
   // Atualiza gaveta admin para o contexto de dashboard
@@ -1369,6 +1414,17 @@ function updateFabVoteButton() {
   if (window.lucide) lucide.createIcons();
 }
 
+function getSortableTitle(title) {
+  if (!title) return "";
+  // Remove emojis e pictogramas unicode
+  let cleaned = title
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\p{Emoji_Modifier_Base}\p{Emoji_Modifier}\uFE0F\u200D]/gu, "")
+    // Remove símbolos e pontuações iniciais (ex: "[Projeto]", "- Ideia", "# Tag")
+    .replace(/^[\s\-_.,:;!?'"()\[\]{}#*~`^/\\|<>@+=§$%&]+/g, "")
+    .trim();
+  return cleaned || title.trim();
+}
+
 function renderCardsList() {
   const container = document.getElementById("board-cards-container");
   const empty = document.getElementById("empty-cards-msg");
@@ -1391,7 +1447,7 @@ function renderCardsList() {
     );
   }
 
-  // 3. Critério de Ordenação configurado
+  // 3. Critério de Ordenação configurado (ordem alfabética ignora emojis e símbolos)
   const sort = state.currentSort || "recent";
   const sortFn = (a, b) => {
     switch (sort) {
@@ -1401,10 +1457,18 @@ function renderCardsList() {
         return (b.vote_count || 0) - (a.vote_count || 0);
       case "comments":
         return (b.comment_count || 0) - (a.comment_count || 0);
-      case "alpha-asc":
-        return (a.title || "").localeCompare(b.title || "");
-      case "alpha-desc":
-        return (b.title || "").localeCompare(a.title || "");
+      case "alpha-asc": {
+        const normA = getSortableTitle(a.title);
+        const normB = getSortableTitle(b.title);
+        const cmp = normA.localeCompare(normB, 'pt-BR', { sensitivity: 'base', numeric: true });
+        return cmp !== 0 ? cmp : (a.title || "").localeCompare(b.title || "", 'pt-BR');
+      }
+      case "alpha-desc": {
+        const normA = getSortableTitle(a.title);
+        const normB = getSortableTitle(b.title);
+        const cmp = normB.localeCompare(normA, 'pt-BR', { sensitivity: 'base', numeric: true });
+        return cmp !== 0 ? cmp : (b.title || "").localeCompare(a.title || "", 'pt-BR');
+      }
       case "recent":
       default:
         return new Date(b.created_at) - new Date(a.created_at);
@@ -1560,13 +1624,14 @@ function renderCardsList() {
       const wrapper = document.createElement("div");
       wrapper.className = "timeline-item animate-fade-in";
       wrapper.innerHTML = `
-        <div class="timeline-node">
-          <i data-lucide="sparkles" class="w-2.5 h-2.5 text-white"></i>
-        </div>
         <div class="timeline-date-badge">
           <i data-lucide="calendar" class="w-3 h-3 text-cyan-300"></i>
           <span>${formatDate(card.created_at)}</span>
         </div>
+        <div class="timeline-node">
+          <i data-lucide="sparkles" class="w-2.5 h-2.5 text-white"></i>
+        </div>
+        <div class="timeline-stem"></div>
       `;
       wrapper.appendChild(cardEl);
       container.appendChild(wrapper);
@@ -1576,6 +1641,17 @@ function renderCardsList() {
   });
 
   if (window.lucide) lucide.createIcons();
+
+  // Suporte a scroll lateral horizontal com a roda do mouse na Linha do Tempo
+  if (container && !container._hasTimelineWheel) {
+    container._hasTimelineWheel = true;
+    container.addEventListener("wheel", (e) => {
+      if (state.currentLayout === "timeline" && e.deltaY !== 0) {
+        e.preventDefault();
+        container.scrollLeft += e.deltaY * 1.4;
+      }
+    }, { passive: false });
+  }
 
   // Ações nos Cards
   container.querySelectorAll(".btn-zoom-media").forEach(el => {
@@ -2300,6 +2376,7 @@ function setupEventListeners() {
   document.getElementById("btn-login-google")?.addEventListener("click", signInWithGoogle);
   document.getElementById("btn-logout")?.addEventListener("click", signOut);
   document.getElementById("btn-logout-drawer")?.addEventListener("click", signOut);
+  document.getElementById("btn-dashboard-logout")?.addEventListener("click", signOut);
 
   // Gaveta Retrátil de Admin & Alternador de Visão
   document.getElementById("btn-admin-tab-toggle")?.addEventListener("click", () => toggleAdminDrawer());
