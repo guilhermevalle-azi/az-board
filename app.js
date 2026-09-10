@@ -740,7 +740,7 @@ function renderBoardsGrid() {
       </div>
       <div class="p-4 flex-1 flex flex-col justify-between bg-white">
         <div>
-          <h3 class="font-title text-sm text-[#0A2334] line-clamp-1 group-hover:text-[#D75B36] transition-colors">${escapeHtml(board.title)}</h3>
+          <h3 class="font-subtitle text-base text-[#0A2334] line-clamp-1 group-hover:text-[#D75B36] transition-colors font-bold tracking-wide">${escapeHtml(board.title)}</h3>
           <p class="font-body text-xs text-gray-500 line-clamp-2 mt-1">${escapeHtml(board.description || 'Sem descrição.')}</p>
         </div>
         <div class="pt-3 mt-3 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-400">
@@ -932,10 +932,17 @@ function updateAdminDrawerContext() {
   const btnShare = document.getElementById("btn-share-board-header");
   const btnExport = document.getElementById("btn-export-png");
 
+  const grpConfig = document.getElementById("admin-group-board-config");
+  const grpLifecycle = document.getElementById("admin-group-board-lifecycle");
+  const grpShare = document.getElementById("admin-group-board-share");
+
   if (!isInsideBoard) {
     // Na tela inicial (Dashboard de Murais)
     if (btnBack) btnBack.classList.add("hidden");
     if (btnCreateDrawer) btnCreateDrawer.classList.remove("hidden");
+    if (grpConfig) grpConfig.classList.add("hidden");
+    if (grpLifecycle) grpLifecycle.classList.add("hidden");
+    if (grpShare) grpShare.classList.add("hidden");
     if (btnToggleStatus) btnToggleStatus.classList.add("hidden");
     if (btnVote) btnVote.classList.add("hidden");
     if (btnStats) btnStats.classList.add("hidden");
@@ -947,6 +954,16 @@ function updateAdminDrawerContext() {
     // No interior de um Mural
     if (btnBack) btnBack.classList.remove("hidden");
     if (btnCreateDrawer) btnCreateDrawer.classList.add("hidden");
+    if (grpLifecycle) grpLifecycle.classList.remove("hidden");
+    if (grpShare) grpShare.classList.remove("hidden");
+
+    const effectiveAdmin = isUserAdmin();
+    const isOwnerOrAdmin = state.user && (state.activeBoard.created_by === state.user.email || effectiveAdmin);
+
+    if (grpConfig) grpConfig.classList.toggle("hidden", !isOwnerOrAdmin);
+    if (btnSettings) btnSettings.classList.toggle("hidden", !isOwnerOrAdmin);
+    if (btnLayoutSort) btnLayoutSort.classList.toggle("hidden", !isOwnerOrAdmin);
+
     if (btnToggleStatus) {
       btnToggleStatus.classList.remove("hidden");
       const isClosed = !!state.activeBoard.is_closed;
@@ -958,16 +975,12 @@ function updateAdminDrawerContext() {
         icon.className = isClosed ? "w-3.5 h-3.5 text-emerald-400" : "w-3.5 h-3.5 text-amber-400";
       }
       btnToggleStatus.className = isClosed
-        ? "px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-500/30 text-xs font-subtitle-semibold flex items-center gap-1.5 transition-all cursor-pointer"
-        : "px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 text-xs font-subtitle-semibold flex items-center gap-1.5 transition-all cursor-pointer";
+        ? "px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/90 hover:text-white border border-emerald-500/40 text-xs font-subtitle-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+        : "px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/90 hover:text-white border border-white/15 text-xs font-subtitle-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs";
     }
 
-    const effectiveAdmin = isUserAdmin();
     if (btnVote) btnVote.classList.toggle("hidden", !state.activeBoard.vote_mode || !effectiveAdmin);
     if (btnStats) btnStats.classList.toggle("hidden", !state.activeBoard.vote_mode || !effectiveAdmin);
-    const isOwnerOrAdmin = state.user && (state.activeBoard.created_by === state.user.email || effectiveAdmin);
-    if (btnSettings) btnSettings.classList.toggle("hidden", !isOwnerOrAdmin);
-    if (btnLayoutSort) btnLayoutSort.classList.toggle("hidden", !isOwnerOrAdmin);
     if (btnShare) btnShare.classList.remove("hidden");
     if (btnExport) btnExport.classList.remove("hidden");
   }
@@ -1004,10 +1017,10 @@ function updateViewModeUI() {
 
   if (state.viewMode === "admin") {
     if (btnAdmin) {
-      btnAdmin.className = "px-3 py-1.5 rounded-lg text-xs font-subtitle-semibold transition-all bg-[#D75B36] text-white shadow-sm flex items-center gap-1.5";
+      btnAdmin.className = "px-3 py-1.5 rounded-lg text-xs font-subtitle-semibold transition-all bg-[#D75B36] text-white shadow-xs flex items-center gap-1.5 cursor-pointer";
     }
     if (btnUser) {
-      btnUser.className = "px-3 py-1.5 rounded-lg text-xs font-subtitle-semibold text-gray-300 hover:text-white transition-all flex items-center gap-1.5 bg-transparent";
+      btnUser.className = "px-3 py-1.5 rounded-lg text-xs font-subtitle-semibold text-white/70 hover:text-white transition-all flex items-center gap-1.5 bg-transparent cursor-pointer";
     }
     if (tabLabel) tabLabel.textContent = "Admin";
     if (tabIcon) {
@@ -1019,15 +1032,15 @@ function updateViewModeUI() {
     }
   } else {
     if (btnAdmin) {
-      btnAdmin.className = "px-3 py-1.5 rounded-lg text-xs font-subtitle-semibold text-gray-300 hover:text-white transition-all flex items-center gap-1.5 bg-transparent";
+      btnAdmin.className = "px-3 py-1.5 rounded-lg text-xs font-subtitle-semibold text-white/70 hover:text-white transition-all flex items-center gap-1.5 bg-transparent cursor-pointer";
     }
     if (btnUser) {
-      btnUser.className = "px-3 py-1.5 rounded-lg text-xs font-subtitle-semibold transition-all bg-emerald-600 text-white shadow-sm flex items-center gap-1.5";
+      btnUser.className = "px-3 py-1.5 rounded-lg text-xs font-subtitle-semibold transition-all bg-white/20 text-white shadow-xs flex items-center gap-1.5 cursor-pointer";
     }
     if (tabLabel) tabLabel.textContent = "Visão Usuário";
     if (tabIcon) {
       tabIcon.setAttribute("data-lucide", "eye");
-      tabIcon.className = "w-3.5 h-3.5 text-emerald-400";
+      tabIcon.className = "w-3.5 h-3.5 text-white/80";
     }
     if (adminTools) {
       adminTools.classList.add("hidden");
@@ -1087,8 +1100,8 @@ function openBoard(board) {
   updateBoardViewStatusUI();
 
   // Configuração de Layout e Ordenação do mural
-  state.currentLayout = board.layout_mode || localStorage.getItem(`az_board_layout_${board.id}`) || 'masonry';
-  state.currentSort = board.sort_mode || localStorage.getItem(`az_board_sort_${board.id}`) || 'recent';
+  state.currentLayout = board.layout_mode || board.layout || localStorage.getItem(`az_board_layout_${board.id}`) || 'masonry';
+  state.currentSort = board.sort_mode || board.sort_order || localStorage.getItem(`az_board_sort_${board.id}`) || 'recent';
   const savedPinned = localStorage.getItem(`az_board_pinned_${board.id}`);
   state.keepPinnedTop = savedPinned !== null ? savedPinned === 'true' : true;
 
@@ -1425,12 +1438,15 @@ async function saveBoardLayoutAndSort() {
   // Tenta persistir no Supabase (se as colunas existirem na tabela boards)
   if (isUserAdmin()) {
     try {
-      await supabaseClient.from("boards").update({
+      const payload = {
+        layout: selectedLayout,
         layout_mode: selectedLayout,
+        sort_order: selectedSort,
         sort_mode: selectedSort
-      }).eq("id", state.activeBoard.id);
+      };
+      await supabaseClient.from("boards").update(payload).eq("id", state.activeBoard.id);
     } catch(e) {
-      console.warn("Colunas de layout no Supabase ainda não criadas, persistido localmente:", e);
+      console.warn("Colunas de layout no Supabase, persistido localmente:", e);
     }
   }
 
@@ -1683,7 +1699,7 @@ function renderCardsList() {
           <div class="flex items-center justify-between gap-1.5 mb-0.5">
             <div class="flex items-center gap-1.5 min-w-0">
               ${renderAuthorAvatar(cm.author_email, cm.author_name, cm.author_avatar, "w-4 h-4", "text-[8px]")}
-              <span class="font-subtitle-semibold text-gray-800 text-[10px] truncate">${escapeHtml(cm.author_name || 'Colaborador')}</span>
+              <span class="font-body-medium text-gray-800 text-[11px] truncate font-medium">${escapeHtml(cm.author_name || 'Colaborador')}</span>
             </div>
             <span class="text-[9px] text-gray-600 flex-shrink-0">${formatDate(cm.created_at)}</span>
           </div>
@@ -1692,11 +1708,11 @@ function renderCardsList() {
       `).join("");
 
       const moreCommentsBtn = card.comment_count > 3
-        ? `<button type="button" class="btn-open-comments text-left text-[11px] font-subtitle-semibold text-[#D75B36] hover:text-[#b84523] pt-0.5 px-1 flex items-center gap-1 cursor-pointer transition-colors" data-id="${card.id}">
+        ? `<button type="button" class="btn-open-comments text-left text-[11px] font-body-medium text-[#D75B36] hover:text-[#b84523] pt-0.5 px-1 flex items-center gap-1 cursor-pointer transition-colors font-medium" data-id="${card.id}">
              <span>Ver todos os ${card.comment_count} comentários</span>
              <i data-lucide="arrow-right" class="w-3 h-3"></i>
            </button>`
-        : `<button type="button" class="btn-open-comments text-left text-[10px] font-subtitle-semibold text-gray-600 hover:text-[#0A2334] pt-0.5 px-1 flex items-center gap-1 cursor-pointer transition-colors" data-id="${card.id}">
+        : `<button type="button" class="btn-open-comments text-left text-[10px] font-body-medium text-gray-600 hover:text-[#0A2334] pt-0.5 px-1 flex items-center gap-1 cursor-pointer transition-colors font-medium" data-id="${card.id}">
              <i data-lucide="message-square-plus" class="w-3 h-3 text-[#D75B36]"></i>
              <span>Adicionar comentário...</span>
            </button>`;
@@ -2448,7 +2464,7 @@ function renderCommentsList() {
       <div class="flex items-center justify-between mb-1">
         <div class="flex items-center gap-2">
           ${renderAuthorAvatar(c.author_email, c.author_name, c.author_avatar, "w-5 h-5", "text-[9px]")}
-          <span class="font-body-semibold text-gray-700">${escapeHtml(c.author_name || 'Colaborador')}</span>
+          <span class="font-body-medium text-gray-800 text-xs font-medium">${escapeHtml(c.author_name || 'Colaborador')}</span>
         </div>
         <div class="flex items-center gap-1">
           <span class="text-[10px] text-gray-400">${formatDate(c.created_at)}</span>
