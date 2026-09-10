@@ -118,7 +118,32 @@
   border-left: 4px solid #A855F7;
 }
 
-/* Layout Masonry de Cards (Estilo Padlet / Mural Livre) */
+.card-theme-red {
+  background-color: #FEF2F2;
+  border-left: 4px solid #EF4444;
+}
+
+.card-theme-cyan {
+  background-color: #F0FDFA;
+  border-left: 4px solid #06B6D4;
+}
+
+.card-theme-pink {
+  background-color: #FDF2F8;
+  border-left: 4px solid #EC4899;
+}
+
+.card-theme-amber {
+  background-color: #FFFBEB;
+  border-left: 4px solid #F59E0B;
+}
+
+.card-theme-gray {
+  background-color: #F8FAFC;
+  border-left: 4px solid #94A3B8;
+}
+
+/* Layout 1: Masonry de Cards (Estilo Padlet / Mural Livre em Cascata) */
 .layout-masonry {
   column-count: 1;
   column-gap: 1rem;
@@ -155,6 +180,183 @@
 .masonry-item {
   break-inside: avoid;
   margin-bottom: 1rem;
+}
+
+/* Layout 2: Grade Alinhada (Grid Uniforme) */
+.layout-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+@media (min-width: 600px) {
+  .layout-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+}
+
+@media (min-width: 900px) {
+  .layout-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+  }
+}
+
+@media (min-width: 1180px) {
+  .layout-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+  }
+}
+
+@media (min-width: 1536px) {
+  .layout-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 1.25rem;
+  }
+}
+
+.layout-grid .masonry-item {
+  margin-bottom: 0;
+  height: 100%;
+}
+
+/* Layout 3: Linha do Tempo (Timeline Cronológica) */
+.layout-timeline {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  max-width: 1020px;
+  margin: 0 auto;
+  padding: 1.5rem 0;
+}
+
+/* Eixo vertical central da timeline */
+.layout-timeline::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 20px;
+  width: 3px;
+  background: linear-gradient(to bottom, #D75B36 0%, rgba(255, 255, 255, 0.4) 50%, #173057 100%);
+  border-radius: 9999px;
+  z-index: 1;
+}
+
+@media (min-width: 768px) {
+  .layout-timeline::before {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+.timeline-item {
+  position: relative;
+  width: 100%;
+  margin-bottom: 2rem;
+  padding-left: 52px;
+  z-index: 2;
+}
+
+@media (min-width: 768px) {
+  .timeline-item {
+    width: 50%;
+    padding-left: 0;
+  }
+  
+  .timeline-item:nth-child(odd) {
+    left: 0;
+    padding-right: 36px;
+  }
+  
+  .timeline-item:nth-child(even) {
+    left: 50%;
+    padding-left: 36px;
+  }
+}
+
+/* Marcador luminoso da timeline */
+.timeline-item .timeline-node {
+  position: absolute;
+  top: 18px;
+  left: 10px;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: #D75B36;
+  border: 3px solid #FFFFFF;
+  box-shadow: 0 0 0 3px rgba(215, 91, 54, 0.35), 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (min-width: 768px) {
+  .timeline-item:nth-child(odd) .timeline-node {
+    left: auto;
+    right: -11px;
+  }
+  
+  .timeline-item:nth-child(even) .timeline-node {
+    left: -11px;
+  }
+}
+
+.timeline-date-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  background: rgba(10, 35, 52, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #FFFFFF;
+  font-size: 0.7rem;
+  font-family: 'Barlow Semi Condensed', sans-serif;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* Adaptação inteligente para murais com fundo claro (Branco, Amarelo Claro, etc.) */
+.board-light-theme #board-view-title {
+  color: #0A2334 !important;
+  text-shadow: none !important;
+}
+
+.board-light-theme #board-view-desc-box {
+  background-color: rgba(255, 255, 255, 0.88) !important;
+  border-color: rgba(10, 35, 52, 0.12) !important;
+  box-shadow: 0 4px 12px rgba(10, 35, 52, 0.05);
+}
+
+.board-light-theme #board-view-desc {
+  color: #173057 !important;
+  text-shadow: none !important;
+}
+
+.board-light-theme #board-search-input {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(10, 35, 52, 0.2) !important;
+  color: #0A2334 !important;
+}
+
+.board-light-theme #board-search-input::placeholder {
+  color: #64748B !important;
+}
+
+.board-light-theme #btn-share-board-canvas {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(10, 35, 52, 0.15) !important;
+  color: #0A2334 !important;
+}
+
+.board-light-theme .layout-timeline::before {
+  background: linear-gradient(to bottom, #D75B36, #173057) !important;
 }
 
 /* Animações e Transições Suaves */
