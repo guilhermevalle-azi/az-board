@@ -47,28 +47,48 @@ const state = {
   realtimeChannel: null,
   editingCardId: null,
   editingBoardId: null,
-  pendingMediaFile: null
+  pendingMediaFile: null,
+  viewMode: 'admin',
+  isAdminDrawerOpen: false
 };
 
 // ============================================================================
-// PALETAS DE CORES & GRADIENTES OFICIAIS AZ
+// PALETAS DE CORES & GRADIENTES (AZ & VARIADAS)
 // ============================================================================
 const AZ_GRADIENTS = [
+  // 2 Opções Oficiais AZ
   { name: "AZ Corporate", value: "linear-gradient(135deg, #0A2334 0%, #173057 50%, #D75B36 100%)" },
   { name: "AZ Pôr do Sol", value: "linear-gradient(135deg, #173057 0%, #D75B36 70%, #DC7B52 100%)" },
-  { name: "AZ Noite Profunda", value: "linear-gradient(135deg, #061520 0%, #0A2334 60%, #173057 100%)" },
-  { name: "AZ Energia Laranja", value: "linear-gradient(135deg, #D75B36 0%, #DC7B52 100%)" },
-  { name: "AZ Minimalista Cinza", value: "linear-gradient(135deg, #374151 0%, #1F2937 100%)" },
-  { name: "AZ Neon Blue", value: "linear-gradient(135deg, #0A2334 0%, #0284C7 100%)" }
+
+  // Opções Variadas Modernas
+  { name: "Ocean Deep", value: "linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)" },
+  { name: "Sunset Horizon", value: "linear-gradient(135deg, #42275a 0%, #734b6d 100%)" },
+  { name: "Emerald Mystic", value: "linear-gradient(135deg, #0d324d 0%, #7f5a83 100%)" },
+  { name: "Midnight Cosmic", value: "linear-gradient(135deg, #1f1c2c 0%, #928dab 100%)" },
+  { name: "Aurora Green", value: "linear-gradient(135deg, #052e16 0%, #065f46 50%, #0d9488 100%)" },
+  { name: "Deep Royal", value: "linear-gradient(135deg, #141e30 0%, #243b55 100%)" },
+  { name: "Fire Amber", value: "linear-gradient(135deg, #7c2d12 0%, #ea580c 50%, #f59e0b 100%)" },
+  { name: "Charcoal Slate", value: "linear-gradient(135deg, #18181b 0%, #27272a 50%, #3f3f46 100%)" },
+  { name: "Vibrant Berry", value: "linear-gradient(135deg, #581c87 0%, #9333ea 50%, #ec4899 100%)" },
+  { name: "Cyber Teal", value: "linear-gradient(135deg, #042f2e 0%, #0f766e 50%, #14b8a6 100%)" }
 ];
 
 const AZ_SOLID_COLORS = [
+  // 2 Opções Oficiais AZ
   { name: "Azul Escuro AZ", value: "#0A2334" },
-  { name: "Azul Claro AZ", value: "#173057" },
   { name: "Laranja AZ", value: "#D75B36" },
-  { name: "Cinza Escuro AZ", value: "#374151" },
-  { name: "Cinza Médio", value: "#676668" },
-  { name: "Preto Profundo", value: "#051019" }
+
+  // Opções Variadas Modernas
+  { name: "Grafite Escuro", value: "#1e293b" },
+  { name: "Índigo Profundo", value: "#1e1b4b" },
+  { name: "Esmeralda Escuro", value: "#064e3b" },
+  { name: "Teal Oceano", value: "#134e4a" },
+  { name: "Vinho Elegante", value: "#4c0519" },
+  { name: "Roxo Noite", value: "#3b0764" },
+  { name: "Azul Petróleo", value: "#0c4a6e" },
+  { name: "Cinza Carvão", value: "#18181b" },
+  { name: "Cobre Intenso", value: "#7c2d12" },
+  { name: "Azul Cobalto", value: "#1e3a8a" }
 ];
 
 const POPULAR_EMOJIS = [
@@ -165,7 +185,57 @@ async function handleAuthenticatedUser(supabaseUser) {
 
   // Iniciar Realtime e Murais
   setupRealtimeWebsockets();
-  loadBoards();
+  await loadBoards();
+
+  // Verificar link direto de compartilhamento (?board=<id>)
+  await checkDirectBoardAccess();
+}
+
+// Acesso direto a um mural específico compartilhado
+async function checkDirectBoardAccess() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const targetBoardId = urlParams.get("board");
+  if (!targetBoardId) return;
+
+  let target = state.boards.find(b => b.id === targetBoardId);
+
+  // Se não estiver na lista geral, busca direto no Supabase
+  if (!target && supabaseClient) {
+    try {
+      const { data, error } = await supabaseClient
+        .from("boards")
+        .select("*, cards(id)")
+        .eq("id", targetBoardId)
+        .single();
+      if (!error && data) {
+        target = {
+          ...data,
+          card_count: data.cards ? data.cards.length : 0
+        };
+        state.boards.push(target);
+      }
+    } catch (e) {
+      console.warn("Aviso ao buscar mural direto:", e);
+    }
+  }
+
+  if (target) {
+    state.isDirectBoardAccess = true;
+    openBoard(target);
+
+    // Se o colaborador não for admin, oculta acesso ao painel geral de murais
+    if (!state.user?.isAdmin && !state.user?.isMasterAdmin) {
+      document.getElementById("btn-back-to-dashboard")?.classList.add("hidden");
+      const headerLogo = document.getElementById("header-logo-home");
+      if (headerLogo) {
+        headerLogo.classList.remove("cursor-pointer");
+        headerLogo.title = "AZ Board - " + target.title;
+        headerLogo.onclick = (e) => { e.preventDefault(); };
+      }
+    }
+  } else {
+    showToast("Mural compartilhado não encontrado.", "error");
+  }
 }
 
 function handleUnauthenticatedUser() {
@@ -368,8 +438,16 @@ function setupRealtimeWebsockets() {
   }
 
   state.realtimeChannel = supabaseClient.channel("az-board-live")
-    .on("postgres_changes", { event: "*", schema: "public", table: "boards" }, () => {
+    .on("postgres_changes", { event: "*", schema: "public", table: "boards" }, (payload) => {
       loadBoards(true);
+      // Atualização imediata do mural ativo em tempo real se alterado
+      if (state.activeBoard && payload.new && payload.new.id === state.activeBoard.id) {
+        state.activeBoard = { ...state.activeBoard, ...payload.new };
+        document.getElementById("board-view-icon").textContent = state.activeBoard.icon || "📌";
+        document.getElementById("board-view-title").textContent = state.activeBoard.title;
+        document.getElementById("board-view-desc").textContent = state.activeBoard.description || "";
+        applyBoardBackground(state.activeBoard);
+      }
     })
     .on("postgres_changes", { event: "*", schema: "public", table: "cards" }, () => {
       if (state.activeBoard) {
@@ -441,7 +519,8 @@ function renderBoardsGrid() {
       bgStyle = `background: url('${board.background_value}') center/cover no-repeat;`;
     }
 
-    const isOwnerOrAdmin = state.user && (board.created_by === state.user.email || state.user.isAdmin || state.user.isMasterAdmin);
+    const isAdmin = state.user && (state.user.isAdmin || state.user.isMasterAdmin);
+    const isOwnerOrAdmin = state.user && (board.created_by === state.user.email || isAdmin);
 
     cardEl.innerHTML = `
       <div class="h-24 p-3 relative flex items-start justify-between" style="${bgStyle}">
@@ -449,13 +528,16 @@ function renderBoardsGrid() {
           ${board.icon || '📌'}
         </div>
         <div class="flex items-center gap-1">
-          ${board.vote_mode ? '<span class="text-[9px] uppercase font-subtitle-semibold bg-[#D75B36] text-white px-2 py-0.5 rounded-full font-bold shadow-sm">Votação</span>' : ''}
+          ${board.vote_mode && isAdmin ? '<span class="text-[9px] uppercase font-subtitle-semibold bg-[#D75B36] text-white px-2 py-0.5 rounded-full font-bold shadow-sm">Votação</span>' : ''}
           ${isOwnerOrAdmin ? `
             <div class="relative group/menu">
               <button type="button" class="btn-board-menu p-1 text-white/80 hover:text-white rounded-lg bg-black/20 hover:bg-black/40">
                 <i data-lucide="more-vertical" class="w-3.5 h-3.5"></i>
               </button>
-              <div class="hidden group-hover/menu:block absolute right-0 top-6 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-20">
+              <div class="hidden group-hover/menu:block absolute right-0 top-6 w-36 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-20">
+                <button type="button" class="btn-share-board w-full text-left px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center gap-1.5" data-id="${board.id}">
+                  <i data-lucide="share-2" class="w-3 h-3 text-emerald-600"></i> Compartilhar
+                </button>
                 <button type="button" class="btn-edit-board w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5" data-id="${board.id}">
                   <i data-lucide="edit-3" class="w-3 h-3 text-[#173057]"></i> Editar
                 </button>
@@ -464,7 +546,11 @@ function renderBoardsGrid() {
                 </button>
               </div>
             </div>
-          ` : ''}
+          ` : `
+            <button type="button" class="btn-share-board p-1 text-white/80 hover:text-white rounded-lg bg-black/20 hover:bg-black/40" data-id="${board.id}" title="Compartilhar Link">
+              <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
+            </button>
+          `}
         </div>
       </div>
       <div class="p-4 flex-1 flex flex-col justify-between bg-white">
@@ -484,7 +570,7 @@ function renderBoardsGrid() {
 
     // Clique no card abre o mural
     cardEl.addEventListener("click", (e) => {
-      if (e.target.closest(".group\\/menu")) return;
+      if (e.target.closest(".group\\/menu") || e.target.closest(".btn-share-board")) return;
       openBoard(board);
     });
 
@@ -493,7 +579,14 @@ function renderBoardsGrid() {
 
   if (window.lucide) lucide.createIcons();
 
-  // Ações de Editar / Excluir Mural
+  // Ações de Compartilhar / Editar / Excluir Mural
+  grid.querySelectorAll(".btn-share-board").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openShareModal(btn.dataset.id);
+    });
+  });
+
   grid.querySelectorAll(".btn-edit-board").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -509,10 +602,136 @@ function renderBoardsGrid() {
   });
 }
 
+// ============================================================================
+// CONTROLE DE VISÃO (MODO ADMIN VS VISÃO DE USUÁRIO) E GAVETA RETRÁTIL
+// ============================================================================
+function isUserAdmin() {
+  if (!state.user) return false;
+  const isRealAdmin = !!(state.user.isAdmin || state.user.isMasterAdmin);
+  if (!isRealAdmin) return false;
+  return state.viewMode !== "user";
+}
+
+function toggleAdminDrawer(forceOpen) {
+  const toolbar = document.getElementById("admin-sliding-toolbar");
+  const chevron = document.getElementById("admin-tab-chevron");
+  if (!toolbar) return;
+
+  const shouldOpen = typeof forceOpen === "boolean" ? forceOpen : !state.isAdminDrawerOpen;
+  state.isAdminDrawerOpen = shouldOpen;
+
+  if (shouldOpen) {
+    toolbar.classList.remove("max-h-0", "opacity-0");
+    toolbar.classList.add("max-h-96", "opacity-100");
+    if (chevron) chevron.classList.add("rotate-180");
+  } else {
+    toolbar.classList.remove("max-h-96", "opacity-100");
+    toolbar.classList.add("max-h-0", "opacity-0");
+    if (chevron) chevron.classList.remove("rotate-180");
+  }
+}
+
+function setViewMode(mode) {
+  state.viewMode = mode;
+  updateViewModeUI();
+
+  if (mode === "admin") {
+    showToast("Modo Admin ativado: ferramentas completas visíveis.", "info");
+  } else {
+    showToast("Visão do Usuário ativada: você está visualizando como um colaborador comum.", "info");
+  }
+
+  // Atualiza controles na tela do mural ativo
+  if (state.activeBoard) {
+    const effectiveAdmin = isUserAdmin();
+    const voteBadge = document.getElementById("board-view-vote-badge");
+    const btnVote = document.getElementById("btn-vote-board");
+    const btnStats = document.getElementById("btn-stats-board");
+    const btnSettings = document.getElementById("btn-board-settings");
+
+    if (voteBadge) voteBadge.classList.toggle("hidden", !state.activeBoard.vote_mode || !effectiveAdmin);
+    if (btnVote) btnVote.classList.toggle("hidden", !state.activeBoard.vote_mode || !effectiveAdmin);
+    if (btnStats) btnStats.classList.toggle("hidden", !state.activeBoard.vote_mode || !effectiveAdmin);
+
+    const isOwnerOrAdmin = state.user && (state.activeBoard.created_by === state.user.email || effectiveAdmin);
+    if (btnSettings) btnSettings.classList.toggle("hidden", !isOwnerOrAdmin);
+
+    renderCardsList();
+  }
+}
+
+function updateViewModeUI() {
+  const btnAdmin = document.getElementById("btn-view-mode-admin");
+  const btnUser = document.getElementById("btn-view-mode-user");
+  const tabLabel = document.getElementById("admin-tab-label");
+  const tabIcon = document.getElementById("admin-tab-icon");
+
+  if (state.viewMode === "admin") {
+    if (btnAdmin) {
+      btnAdmin.className = "px-3 py-1.5 rounded-lg text-xs font-subtitle-semibold transition-all bg-[#D75B36] text-white shadow-sm flex items-center gap-1.5";
+    }
+    if (btnUser) {
+      btnUser.className = "px-3 py-1.5 rounded-lg text-xs font-subtitle-semibold text-gray-300 hover:text-white transition-all flex items-center gap-1.5 bg-transparent";
+    }
+    if (tabLabel) tabLabel.textContent = "Admin";
+    if (tabIcon) {
+      tabIcon.setAttribute("data-lucide", "shield");
+      tabIcon.className = "w-3.5 h-3.5 text-[#D75B36]";
+    }
+  } else {
+    if (btnAdmin) {
+      btnAdmin.className = "px-3 py-1.5 rounded-lg text-xs font-subtitle-semibold text-gray-300 hover:text-white transition-all flex items-center gap-1.5 bg-transparent";
+    }
+    if (btnUser) {
+      btnUser.className = "px-3 py-1.5 rounded-lg text-xs font-subtitle-semibold transition-all bg-emerald-600 text-white shadow-sm flex items-center gap-1.5";
+    }
+    if (tabLabel) tabLabel.textContent = "Visão Usuário";
+    if (tabIcon) {
+      tabIcon.setAttribute("data-lucide", "eye");
+      tabIcon.className = "w-3.5 h-3.5 text-emerald-400";
+    }
+  }
+
+  if (window.lucide) {
+    lucide.createIcons();
+  }
+}
+
 function openBoard(board) {
   state.activeBoard = board;
   document.getElementById("view-dashboard").classList.add("hidden");
   document.getElementById("view-board").classList.remove("hidden");
+
+  // Oculta cabeçalho superior padrão para deixar a tela do mural 100% imersiva e limpa
+  const mainHeader = document.getElementById("main-app-header");
+  if (mainHeader) mainHeader.classList.add("hidden");
+
+  // Controle da gaveta retrátil de Admin
+  const isRealAdmin = !!(state.user?.isAdmin || state.user?.isMasterAdmin);
+  const adminWrapper = document.getElementById("admin-collapsible-wrapper");
+  if (adminWrapper) {
+    if (isRealAdmin) {
+      adminWrapper.classList.remove("hidden");
+      toggleAdminDrawer(false);
+      updateViewModeUI();
+    } else {
+      adminWrapper.classList.add("hidden");
+    }
+  }
+
+  // Atualiza query param da URL com ?board=<id> de forma transparente
+  try {
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.set("board", board.id);
+    history.replaceState(null, "", newUrl.toString());
+  } catch(e) {}
+
+  // Se o usuário não for admin e acessou via link compartilhado direto, oculta botão de voltar
+  const btnBack = document.getElementById("btn-back-to-dashboard");
+  if (btnBack) {
+    const isRestrictedNonAdmin = state.isDirectBoardAccess && !isRealAdmin;
+    btnBack.classList.toggle("hidden", isRestrictedNonAdmin);
+  }
 
   // Configurações visuais do mural ativo
   document.getElementById("board-view-icon").textContent = board.icon || "📌";
@@ -524,11 +743,14 @@ function openBoard(board) {
   const btnStats = document.getElementById("btn-stats-board");
   const btnSettings = document.getElementById("btn-board-settings");
 
-  if (voteBadge) voteBadge.classList.toggle("hidden", !board.vote_mode);
-  if (btnVote) btnVote.classList.toggle("hidden", !board.vote_mode);
-  if (btnStats) btnStats.classList.toggle("hidden", !board.vote_mode && !state.user?.isAdmin);
+  const effectiveAdmin = isUserAdmin();
 
-  const isOwnerOrAdmin = state.user && (board.created_by === state.user.email || state.user.isAdmin || state.user.isMasterAdmin);
+  // Votação e Apuração: Exclusivos para Administradores
+  if (voteBadge) voteBadge.classList.toggle("hidden", !board.vote_mode || !effectiveAdmin);
+  if (btnVote) btnVote.classList.toggle("hidden", !board.vote_mode || !effectiveAdmin);
+  if (btnStats) btnStats.classList.toggle("hidden", !board.vote_mode || !effectiveAdmin);
+
+  const isOwnerOrAdmin = state.user && (board.created_by === state.user.email || effectiveAdmin);
   if (btnSettings) btnSettings.classList.toggle("hidden", !isOwnerOrAdmin);
 
   // Aplica o fundo do mural
@@ -540,8 +762,27 @@ function openBoard(board) {
 
 function showDashboardView() {
   state.activeBoard = null;
+  state.isDirectBoardAccess = false;
   document.getElementById("view-board").classList.add("hidden");
   document.getElementById("view-dashboard").classList.remove("hidden");
+
+  // Restaura cabeçalho superior padrão
+  const mainHeader = document.getElementById("main-app-header");
+  if (mainHeader) mainHeader.classList.remove("hidden");
+
+  // Oculta a gaveta de admin
+  const adminWrapper = document.getElementById("admin-collapsible-wrapper");
+  if (adminWrapper) {
+    adminWrapper.classList.add("hidden");
+    toggleAdminDrawer(false);
+  }
+
+  // Limpa o query param ?board da URL
+  try {
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.delete("board");
+    history.replaceState(null, "", newUrl.pathname);
+  } catch(e) {}
 
   // Restaura fundo padrão
   const bgEl = document.getElementById("board-custom-bg");
@@ -625,33 +866,53 @@ async function handleBoardFormSubmit(e) {
 
   showLoader(true);
   try {
-    if (id) {
-      // Edição
-      const { error } = await supabaseClient.from("boards").update({
-        title: title,
-        description: desc,
-        icon: icon,
-        vote_mode: voteMode,
-        background_type: bgType,
-        background_value: bgValue
-      }).eq("id", id);
-      if (error) throw error;
-      showToast("Mural atualizado com sucesso!", "success");
-    } else {
-      // Criação
-      const { data, error } = await supabaseClient.from("boards").insert([{
-        title: title,
-        description: desc,
-        icon: icon,
-        vote_mode: voteMode,
-        background_type: bgType,
-        background_value: bgValue,
-        created_by: state.user?.email || MASTER_ADMIN
-      }]).select().single();
-      if (error) throw error;
-      showToast("Mural criado com sucesso!", "success");
-      if (data) openBoard(data);
-    }
+      if (id) {
+        // Edição
+        const { error } = await supabaseClient.from("boards").update({
+          title: title,
+          description: desc,
+          icon: icon,
+          vote_mode: voteMode,
+          background_type: bgType,
+          background_value: bgValue
+        }).eq("id", id);
+        if (error) throw error;
+
+        // Atualização instantânea na tela do mural ativo
+        if (state.activeBoard && state.activeBoard.id === id) {
+          state.activeBoard.title = title;
+          state.activeBoard.description = desc;
+          state.activeBoard.icon = icon;
+          state.activeBoard.vote_mode = voteMode;
+          state.activeBoard.background_type = bgType;
+          state.activeBoard.background_value = bgValue;
+
+          document.getElementById("board-view-icon").textContent = icon;
+          document.getElementById("board-view-title").textContent = title;
+          document.getElementById("board-view-desc").textContent = desc;
+          applyBoardBackground(state.activeBoard);
+        }
+        showToast("Mural atualizado com sucesso!", "success");
+      } else {
+        // Criação
+        const { data, error } = await supabaseClient.from("boards").insert([{
+          title: title,
+          description: desc,
+          icon: icon,
+          vote_mode: voteMode,
+          background_type: bgType,
+          background_value: bgValue,
+          created_by: state.user?.email || MASTER_ADMIN
+        }]).select().single();
+        if (error) throw error;
+        showToast("Mural criado com sucesso!", "success");
+        if (data) {
+          openBoard(data);
+          setTimeout(() => {
+            openShareModal(data.id);
+          }, 500);
+        }
+      }
 
     closeModal("modal-board");
     await loadBoards(true);
@@ -735,9 +996,7 @@ function renderCardsList() {
 
   // Ordenação
   const sortMode = document.getElementById("board-sort-select")?.value || "recent";
-  if (sortMode === "votes") {
-    list.sort((a, b) => b.vote_count - a.vote_count);
-  } else if (sortMode === "alphabetical") {
+  if (sortMode === "alphabetical") {
     list.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
   }
 
@@ -748,7 +1007,9 @@ function renderCardsList() {
   if (empty) empty.classList.add("hidden");
 
   list.forEach(card => {
-    const isOwnerOrAdmin = state.user && (card.author_email === state.user.email || state.user.isAdmin || state.user.isMasterAdmin);
+    const isOwner = state.user && card.author_email === state.user.email;
+    const isAdmin = isUserAdmin();
+    const isOwnerOrAdmin = isOwner || isAdmin;
     const themeClass = `card-theme-${card.card_color || card.color_theme || 'white'}`;
 
     const cardEl = document.createElement("div");
@@ -794,9 +1055,11 @@ function renderCardsList() {
               <i data-lucide="more-horizontal" class="w-4 h-4"></i>
             </button>
             <div class="hidden group-hover/menu:block absolute right-0 top-6 w-32 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-20">
-              <button type="button" class="btn-pin-card w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5" data-id="${card.id}" data-pinned="${card.pinned || card.is_pinned}">
-                <i data-lucide="pin" class="w-3 h-3 text-[#D75B36]"></i> ${(card.pinned || card.is_pinned) ? 'Desafixar' : 'Fixar no Topo'}
-              </button>
+              ${isAdmin ? `
+                <button type="button" class="btn-pin-card w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5" data-id="${card.id}" data-pinned="${card.pinned || card.is_pinned}">
+                  <i data-lucide="pin" class="w-3 h-3 text-[#D75B36]"></i> ${(card.pinned || card.is_pinned) ? 'Desafixar' : 'Fixar no Topo'}
+                </button>
+              ` : ''}
               <button type="button" class="btn-edit-card w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5" data-id="${card.id}">
                 <i data-lucide="edit-3" class="w-3 h-3 text-[#173057]"></i> Editar
               </button>
@@ -814,7 +1077,7 @@ function renderCardsList() {
       <!-- Mídia -->
       ${mediaHtml}
 
-      <!-- Rodapé do Card (Autor, Comentários & Votos) -->
+      <!-- Rodapé do Card (Autor e Comentários) -->
       <div class="pt-3 mt-3 border-t border-gray-100/80 flex items-center justify-between text-[11px] text-gray-400">
         <div class="flex items-center gap-1.5 line-clamp-1">
           <div class="w-5 h-5 rounded-full bg-[#173057] text-white flex items-center justify-center font-bold text-[9px] flex-shrink-0">
@@ -825,15 +1088,9 @@ function renderCardsList() {
 
         <div class="flex items-center gap-2 flex-shrink-0">
           <!-- Comentários -->
-          <button type="button" class="btn-open-comments flex items-center gap-1 text-gray-500 hover:text-[#0A2334] p-1 transition-colors" data-id="${card.id}">
-            <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
-            <span class="font-subtitle-semibold text-xs">${card.comment_count}</span>
-          </button>
-
-          <!-- Voto / Curtida -->
-          <button type="button" class="btn-vote-card flex items-center gap-1 px-2 py-0.5 rounded-lg border transition-all ${card.has_voted ? 'bg-[#D75B36] border-[#D75B36] text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-[#D75B36] hover:text-[#D75B36]'}" data-id="${card.id}">
-            <i data-lucide="heart" class="w-3.5 h-3.5 ${card.has_voted ? 'fill-white' : ''}"></i>
-            <span class="font-subtitle-semibold text-xs">${card.vote_count}</span>
+          <button type="button" class="btn-open-comments flex items-center gap-1.5 text-gray-500 hover:text-[#0A2334] px-2 py-1 rounded-lg bg-gray-50 border border-gray-100 hover:border-gray-200 transition-all" data-id="${card.id}" title="Ver Comentários">
+            <i data-lucide="message-square" class="w-3.5 h-3.5 text-[#D75B36]"></i>
+            <span class="font-subtitle-semibold text-xs text-gray-600">${card.comment_count}</span>
           </button>
         </div>
       </div>
@@ -851,10 +1108,6 @@ function renderCardsList() {
 
   container.querySelectorAll(".btn-open-comments").forEach(btn => {
     btn.addEventListener("click", () => openCommentsModal(btn.dataset.id));
-  });
-
-  container.querySelectorAll(".btn-vote-card").forEach(btn => {
-    btn.addEventListener("click", () => handleCardVoteClick(btn.dataset.id));
   });
 
   container.querySelectorAll(".btn-pin-card").forEach(btn => {
@@ -881,6 +1134,13 @@ function openNewCardModal() {
   document.getElementById("card-color-hidden").value = "white";
   selectCardColor("white");
 
+  // Apenas Administradores podem fixar no topo
+  const isAdmin = isUserAdmin();
+  const pinContainer = document.getElementById("card-pinned-container");
+  if (pinContainer) pinContainer.classList.toggle("hidden", !isAdmin);
+  const pinToggle = document.getElementById("card-pinned-toggle");
+  if (pinToggle) pinToggle.checked = false;
+
   document.getElementById("card-upload-box").classList.add("hidden");
   document.getElementById("card-youtube-box").classList.add("hidden");
   document.getElementById("card-media-preview-container").classList.add("hidden");
@@ -899,7 +1159,13 @@ function openEditCardModal(cardId) {
   document.getElementById("card-id-hidden").value = card.id;
   document.getElementById("card-title-input").value = card.title || "";
   document.getElementById("card-content-input").value = card.content || "";
-  document.getElementById("card-pinned-toggle").checked = !!(card.pinned || card.is_pinned);
+
+  // Apenas Administradores podem fixar no topo
+  const isAdmin = isUserAdmin();
+  const pinContainer = document.getElementById("card-pinned-container");
+  if (pinContainer) pinContainer.classList.toggle("hidden", !isAdmin);
+  const pinToggle = document.getElementById("card-pinned-toggle");
+  if (pinToggle) pinToggle.checked = !!(card.pinned || card.is_pinned);
 
   const type = card.media_type || "text";
   const radio = document.querySelector(`input[name="card_type"][value="${type}"]`);
@@ -925,7 +1191,17 @@ async function handleCardFormSubmit(e) {
   const title = document.getElementById("card-title-input").value.trim();
   const content = document.getElementById("card-content-input").value.trim();
   const color = document.getElementById("card-color-hidden").value || "white";
-  const isPinned = document.getElementById("card-pinned-toggle").checked;
+
+  // Apenas administradores podem definir/alterar o estado de fixado no topo
+  const isAdmin = isUserAdmin();
+  let isPinned = false;
+  if (isAdmin) {
+    isPinned = document.getElementById("card-pinned-toggle")?.checked || false;
+  } else if (id) {
+    const existing = state.cards.find(c => c.id === id);
+    isPinned = existing ? !!(existing.pinned || existing.is_pinned) : false;
+  }
+
   const mediaType = document.querySelector('input[name="card_type"]:checked')?.value || "text";
 
   let mediaUrl = "";
@@ -1020,6 +1296,10 @@ async function uploadImageToSupabaseStorage(file) {
 }
 
 async function togglePinCard(cardId, currentPinned) {
+  if (!state.user?.isAdmin && !state.user?.isMasterAdmin) {
+    showToast("Apenas administradores podem fixar cards no topo.", "error");
+    return;
+  }
   try {
     const { error } = await supabaseClient.from("cards").update({ pinned: !currentPinned }).eq("id", cardId);
     if (error) throw error;
@@ -1074,19 +1354,31 @@ async function handleCardVoteClick(cardId) {
 }
 
 function openVotingModal() {
+  if (!state.user?.isAdmin && !state.user?.isMasterAdmin) {
+    showToast("Apenas administradores têm acesso à votação.", "error");
+    return;
+  }
+
   const container = document.getElementById("vote-options-list");
   if (!container || !state.cards) return;
 
   container.innerHTML = "";
 
   state.cards.forEach(card => {
+    const authorInitial = (card.author_name || "A").charAt(0).toUpperCase();
     const opt = document.createElement("label");
     opt.className = "flex items-center gap-3 p-3 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-200 cursor-pointer transition-all";
     opt.innerHTML = `
       <input type="radio" name="vote_selected_card" value="${card.id}" class="w-4 h-4 text-emerald-600 focus:ring-emerald-500">
-      <div class="flex-1">
-        <p class="font-title text-xs text-[#0A2334] font-semibold">${escapeHtml(card.title)}</p>
-        <p class="font-body text-[11px] text-gray-500 line-clamp-1">${escapeHtml(card.content || 'Sem descrição')}</p>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center justify-between gap-2">
+          <p class="font-title text-xs text-[#0A2334] font-semibold truncate">${escapeHtml(card.title)}</p>
+          <span class="inline-flex items-center gap-1.5 text-[10px] text-gray-500 bg-white px-2 py-0.5 rounded-lg border border-gray-200 flex-shrink-0 shadow-xs">
+            <span class="w-4 h-4 rounded-full bg-[#173057] text-white flex items-center justify-center font-bold text-[8px]">${authorInitial}</span>
+            <span class="font-body-medium text-gray-700 truncate max-w-[120px]">${escapeHtml(card.author_name || 'Colaborador')}</span>
+          </span>
+        </div>
+        <p class="font-body text-[11px] text-gray-500 line-clamp-1 mt-1">${escapeHtml(card.content || 'Sem descrição')}</p>
       </div>
     `;
     container.appendChild(opt);
@@ -1096,6 +1388,11 @@ function openVotingModal() {
 }
 
 async function submitEnqueteVote() {
+  if (!state.user?.isAdmin && !state.user?.isMasterAdmin) {
+    showToast("Apenas administradores têm acesso à votação.", "error");
+    return;
+  }
+
   const selected = document.querySelector('input[name="vote_selected_card"]:checked')?.value;
   if (!selected) {
     showToast("Selecione um card para votar!", "error");
@@ -1126,8 +1423,12 @@ async function submitEnqueteVote() {
   }
 }
 
-// Apuração de Votos & Gráfico Chart.js
+// Apuração de Votos & Gráfico Chart.js (Exclusivo Administrador)
 function openAdminVoteStatsModal() {
+  if (!state.user?.isAdmin && !state.user?.isMasterAdmin) {
+    showToast("Apenas administradores têm acesso à apuração dos votos.", "error");
+    return;
+  }
   renderVoteStats();
   openModal("modal-vote-stats");
 }
@@ -1171,16 +1472,23 @@ function renderVoteStats() {
   if (rankingsContainer) {
     rankingsContainer.innerHTML = "";
     sorted.forEach((card, idx) => {
+      const authorInitial = (card.author_name || "A").charAt(0).toUpperCase();
       const row = document.createElement("div");
       row.className = "flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-100 text-xs";
       row.innerHTML = `
-        <div class="flex items-center gap-2.5">
-          <span class="w-5 h-5 rounded-full ${idx === 0 ? 'bg-amber-400 text-amber-900 font-bold' : 'bg-gray-200 text-gray-700'} flex items-center justify-center text-[10px]">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span class="w-5 h-5 rounded-full ${idx === 0 ? 'bg-amber-400 text-amber-900 font-bold' : 'bg-gray-200 text-gray-700'} flex items-center justify-center text-[10px] flex-shrink-0">
             ${idx + 1}º
           </span>
-          <span class="font-body-semibold text-gray-800 line-clamp-1">${escapeHtml(card.title)}</span>
+          <div class="min-w-0">
+            <span class="font-body-semibold text-gray-800 line-clamp-1">${escapeHtml(card.title)}</span>
+            <div class="flex items-center gap-1 text-[10px] text-gray-400 font-body mt-0.5">
+              <span class="w-3.5 h-3.5 rounded-full bg-[#173057] text-white flex items-center justify-center font-bold text-[8px] flex-shrink-0">${authorInitial}</span>
+              <span class="truncate">Por: ${escapeHtml(card.author_name || 'Colaborador')}</span>
+            </div>
+          </div>
         </div>
-        <span class="font-title text-[#D75B36] font-bold text-xs">${card.vote_count} ${card.vote_count === 1 ? 'voto' : 'votos'}</span>
+        <span class="font-title text-[#D75B36] font-bold text-xs flex-shrink-0 bg-white px-2 py-0.5 rounded-lg border border-gray-100">${card.vote_count} ${card.vote_count === 1 ? 'voto' : 'votos'}</span>
       `;
       rankingsContainer.appendChild(row);
     });
@@ -1359,6 +1667,13 @@ function setupEventListeners() {
   document.getElementById("btn-login-google")?.addEventListener("click", signInWithGoogle);
   document.getElementById("btn-login-dev")?.addEventListener("click", devTestLogin);
   document.getElementById("btn-logout")?.addEventListener("click", signOut);
+  document.getElementById("btn-logout-drawer")?.addEventListener("click", signOut);
+
+  // Gaveta Retrátil de Admin & Alternador de Visão
+  document.getElementById("btn-admin-tab-toggle")?.addEventListener("click", () => toggleAdminDrawer());
+  document.getElementById("btn-view-mode-admin")?.addEventListener("click", () => setViewMode("admin"));
+  document.getElementById("btn-view-mode-user")?.addEventListener("click", () => setViewMode("user"));
+  document.getElementById("btn-manage-admins-drawer")?.addEventListener("click", openAdminManagementModal);
 
   // Navegação
   document.getElementById("header-logo-home")?.addEventListener("click", showDashboardView);
@@ -1374,6 +1689,7 @@ function setupEventListeners() {
   // Criação de Card
   document.getElementById("btn-add-card-header")?.addEventListener("click", openNewCardModal);
   document.getElementById("btn-add-card-empty")?.addEventListener("click", openNewCardModal);
+  document.getElementById("btn-fab-add-card")?.addEventListener("click", openNewCardModal);
 
   // Ações do Mural
   document.getElementById("btn-vote-board")?.addEventListener("click", openVotingModal);
@@ -1386,6 +1702,10 @@ function setupEventListeners() {
 
   // Filtros & Ordenação
   document.getElementById("global-search-input")?.addEventListener("input", (e) => {
+    state.currentSearch = e.target.value.trim();
+    if (state.activeBoard) renderCardsList();
+  });
+  document.getElementById("board-search-input")?.addEventListener("input", (e) => {
     state.currentSearch = e.target.value.trim();
     if (state.activeBoard) renderCardsList();
   });
@@ -1438,6 +1758,26 @@ function setupEventListeners() {
     r.addEventListener("change", (e) => handleBackgroundTypeChange(e.target.value));
   });
 
+  // Upload e URL de Imagem de Fundo do Mural
+  document.getElementById("btn-upload-board-bg")?.addEventListener("click", () => {
+    document.getElementById("board-bg-file-input")?.click();
+  });
+
+  document.getElementById("board-bg-file-input")?.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (file) uploadBoardBackgroundToStorage(file);
+  });
+
+  document.getElementById("board-bg-image-url")?.addEventListener("input", (e) => {
+    updateLiveBackgroundPreview("image", e.target.value.trim());
+  });
+
+  // Compartilhamento de Mural
+  document.getElementById("btn-share-board-header")?.addEventListener("click", () => {
+    if (state.activeBoard) openShareModal(state.activeBoard.id);
+  });
+  document.getElementById("btn-copy-share-url")?.addEventListener("click", handleCopyShareUrl);
+
   document.getElementById("btn-open-icon-picker")?.addEventListener("click", () => {
     openModal("modal-icon-picker");
   });
@@ -1446,7 +1786,13 @@ function setupEventListeners() {
   document.querySelectorAll(".btn-close-modal").forEach(btn => {
     btn.addEventListener("click", () => {
       const modalId = btn.dataset.modal;
-      if (modalId) closeModal(modalId);
+      if (modalId) {
+        closeModal(modalId);
+        // Se cancelou a edição de fundo do mural, restaura o fundo original ativo
+        if (modalId === "modal-board" && state.activeBoard) {
+          applyBoardBackground(state.activeBoard);
+        }
+      }
     });
   });
 }
@@ -1470,6 +1816,17 @@ function handleBackgroundTypeChange(type) {
   document.getElementById("bg-presets-gradient")?.classList.toggle("hidden", type !== "gradient");
   document.getElementById("bg-presets-color")?.classList.toggle("hidden", type !== "color");
   document.getElementById("bg-custom-image")?.classList.toggle("hidden", type !== "image");
+
+  if (type === "gradient") {
+    const val = document.getElementById("board-bg-value-hidden").value || AZ_GRADIENTS[0].value;
+    updateLiveBackgroundPreview("gradient", val);
+  } else if (type === "color") {
+    const val = document.getElementById("board-bg-value-hidden").value || AZ_SOLID_COLORS[0].value;
+    updateLiveBackgroundPreview("color", val);
+  } else if (type === "image") {
+    const val = document.getElementById("board-bg-image-url")?.value.trim();
+    updateLiveBackgroundPreview("image", val);
+  }
 }
 
 function renderGradientsList() {
@@ -1477,24 +1834,35 @@ function renderGradientsList() {
   if (!container) return;
   container.innerHTML = "";
 
-  AZ_GRADIENTS.forEach((g, idx) => {
-    const item = document.createElement("div");
-    item.className = `h-9 rounded-xl cursor-pointer border-2 border-transparent transition-all hover:scale-105 gradient-item ${idx === 0 ? 'border-white shadow-md scale-105' : ''}`;
-    item.style.background = g.value;
-    item.title = g.name;
+  AZ_GRADIENTS.forEach((g) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "p-2 rounded-xl border border-gray-200 bg-white hover:border-[#D75B36] transition-all flex items-center gap-2 text-left group gradient-item";
     item.dataset.value = g.value;
+    item.innerHTML = `
+      <div class="w-6 h-6 rounded-lg shadow-sm flex-shrink-0 flex items-center justify-center text-white" style="background: ${g.value}">
+        <i data-lucide="check" class="w-3.5 h-3.5 opacity-0 check-icon"></i>
+      </div>
+      <span class="text-[11px] font-body-semibold text-gray-700 group-hover:text-[#D75B36] truncate leading-tight">${g.name}</span>
+    `;
     item.addEventListener("click", () => selectGradientPreset(g.value));
     container.appendChild(item);
   });
+  if (window.lucide) lucide.createIcons();
 }
 
 function selectGradientPreset(value) {
   document.getElementById("board-bg-value-hidden").value = value;
+  updateLiveBackgroundPreview("gradient", value);
+
   document.querySelectorAll(".gradient-item").forEach(el => {
     const match = el.dataset.value === value;
-    el.classList.toggle("border-white", match);
-    el.classList.toggle("shadow-md", match);
-    el.classList.toggle("scale-105", match);
+    el.classList.toggle("border-[#D75B36]", match);
+    el.classList.toggle("bg-[#FFF8F5]", match);
+    el.classList.toggle("ring-1", match);
+    el.classList.toggle("ring-[#D75B36]", match);
+    const icon = el.querySelector(".check-icon");
+    if (icon) icon.classList.toggle("opacity-0", !match);
   });
 }
 
@@ -1504,24 +1872,157 @@ function renderSolidColorsList() {
   container.innerHTML = "";
 
   AZ_SOLID_COLORS.forEach(c => {
-    const item = document.createElement("div");
-    item.className = "h-9 rounded-xl cursor-pointer border-2 border-transparent transition-all hover:scale-105 solid-item";
-    item.style.backgroundColor = c.value;
-    item.title = c.name;
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "p-2 rounded-xl border border-gray-200 bg-white hover:border-[#D75B36] transition-all flex items-center gap-2 text-left group solid-item";
     item.dataset.value = c.value;
+    item.innerHTML = `
+      <div class="w-6 h-6 rounded-lg shadow-sm flex-shrink-0 flex items-center justify-center text-white" style="background-color: ${c.value}">
+        <i data-lucide="check" class="w-3.5 h-3.5 opacity-0 check-icon"></i>
+      </div>
+      <span class="text-[11px] font-body-semibold text-gray-700 group-hover:text-[#D75B36] truncate leading-tight">${c.name}</span>
+    `;
     item.addEventListener("click", () => selectSolidColorPreset(c.value));
     container.appendChild(item);
   });
+  if (window.lucide) lucide.createIcons();
 }
 
 function selectSolidColorPreset(value) {
   document.getElementById("board-bg-value-hidden").value = value;
+  updateLiveBackgroundPreview("color", value);
+
   document.querySelectorAll(".solid-item").forEach(el => {
     const match = el.dataset.value === value;
-    el.classList.toggle("border-white", match);
-    el.classList.toggle("shadow-md", match);
-    el.classList.toggle("scale-105", match);
+    el.classList.toggle("border-[#D75B36]", match);
+    el.classList.toggle("bg-[#FFF8F5]", match);
+    el.classList.toggle("ring-1", match);
+    el.classList.toggle("ring-[#D75B36]", match);
+    const icon = el.querySelector(".check-icon");
+    if (icon) icon.classList.toggle("opacity-0", !match);
   });
+}
+
+// Atualização instantânea e automática do fundo na tela e no preview
+function updateLiveBackgroundPreview(type, value) {
+  const previewBox = document.getElementById("board-bg-preview-box");
+  const bgEl = document.getElementById("board-custom-bg");
+
+  let cssBg = "";
+  if (type === "gradient" || type === "color") {
+    cssBg = value || "linear-gradient(135deg, #0A2334 0%, #173057 100%)";
+  } else if (type === "image" && value) {
+    cssBg = `url('${value}') center/cover no-repeat`;
+  } else {
+    cssBg = "linear-gradient(135deg, #0A2334 0%, #173057 100%)";
+  }
+
+  if (previewBox) previewBox.style.background = cssBg;
+
+  // Atualização em tempo real do fundo atrás do modal
+  if (bgEl && state.activeBoard) {
+    if (type === "image" && value) {
+      bgEl.style.background = `url('${value}') center/cover no-repeat fixed`;
+    } else {
+      bgEl.style.background = cssBg;
+    }
+  }
+}
+
+// Upload de imagem de fundo para o bucket board-media
+async function uploadBoardBackgroundToStorage(file) {
+  if (!supabaseClient || !file) return;
+
+  const fileExt = file.name.split('.').pop();
+  const fileName = `bg_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+  const filePath = `backgrounds/${fileName}`;
+
+  const progressBox = document.getElementById("board-bg-upload-progress");
+  const progressBar = document.getElementById("board-bg-progress-bar");
+  if (progressBox) progressBox.classList.remove("hidden");
+  if (progressBar) progressBar.style.width = "40%";
+
+  try {
+    const { error } = await supabaseClient.storage
+      .from("board-media")
+      .upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: false
+      });
+
+    if (progressBar) progressBar.style.width = "100%";
+    if (error) throw error;
+
+    const { data: publicUrlData } = supabaseClient.storage
+      .from("board-media")
+      .getPublicUrl(filePath);
+
+    const publicUrl = publicUrlData.publicUrl;
+    const urlInput = document.getElementById("board-bg-image-url");
+    if (urlInput) urlInput.value = publicUrl;
+
+    updateLiveBackgroundPreview("image", publicUrl);
+    showToast("Imagem de fundo enviada com sucesso!", "success");
+  } catch (err) {
+    console.error("Erro no upload de fundo:", err);
+    showToast("Erro ao enviar imagem de fundo: " + err.message, "error");
+  } finally {
+    setTimeout(() => {
+      if (progressBox) progressBox.classList.add("hidden");
+      if (progressBar) progressBar.style.width = "0%";
+    }, 600);
+  }
+}
+
+// ============================================================================
+// COMPARTILHAMENTO DE MURAL
+// ============================================================================
+function openShareModal(boardId) {
+  const board = state.boards.find(b => b.id === boardId) || state.activeBoard;
+  if (!board) return;
+
+  const titleEl = document.getElementById("share-modal-title");
+  const iconEl = document.getElementById("share-modal-icon");
+  const urlInput = document.getElementById("share-board-url-input");
+
+  if (titleEl) titleEl.textContent = board.title;
+  if (iconEl) iconEl.textContent = board.icon || "📌";
+
+  const shareUrl = `${window.location.origin}/?board=${board.id}`;
+  if (urlInput) urlInput.value = shareUrl;
+
+  // Tenta copiar automaticamente de forma instantânea
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      showToast("Link de compartilhamento copiado!", "success");
+    }).catch(() => {});
+  }
+
+  openModal("modal-share-board");
+}
+
+function handleCopyShareUrl() {
+  const urlInput = document.getElementById("share-board-url-input");
+  const copyBtnText = document.getElementById("btn-copy-share-url-text");
+  if (!urlInput) return;
+
+  urlInput.select();
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(urlInput.value).then(() => {
+      if (copyBtnText) copyBtnText.textContent = "Copiado!";
+      showToast("Link copiado para a área de transferência!", "success");
+      setTimeout(() => {
+        if (copyBtnText) copyBtnText.textContent = "Copiar";
+      }, 2000);
+    });
+  } else {
+    document.execCommand("copy");
+    if (copyBtnText) copyBtnText.textContent = "Copiado!";
+    showToast("Link copiado para a área de transferência!", "success");
+    setTimeout(() => {
+      if (copyBtnText) copyBtnText.textContent = "Copiar";
+    }, 2000);
+  }
 }
 
 function renderEmojiPicker() {
