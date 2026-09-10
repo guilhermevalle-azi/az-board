@@ -578,6 +578,7 @@ function setupRealtimeWebsockets() {
         document.getElementById("board-view-title").textContent = state.activeBoard.title;
         document.getElementById("board-view-desc").textContent = state.activeBoard.description || "";
         applyBoardBackground(state.activeBoard);
+        updateBoardViewStatusUI();
       }
     })
     .on("postgres_changes", { event: "*", schema: "public", table: "cards" }, () => {
@@ -617,14 +618,28 @@ async function loadBoards(isSilent = false) {
       const isClosed = (b.is_closed !== undefined && b.is_closed !== null)
         ? !!b.is_closed
         : (localClosed === "true");
+      const localSingle = localStorage.getItem("az_board_single_post_" + b.id);
+      const isSinglePost = (b.single_post_mode !== undefined && b.single_post_mode !== null)
+        ? !!b.single_post_mode
+        : (localSingle === "true");
       return {
         ...b,
         is_closed: isClosed,
+        single_post_mode: isSinglePost,
         card_count: b.cards ? b.cards.length : 0
       };
     });
 
     renderBoardsGrid();
+
+    // Se houver um mural ativo aberto, atualiza suas propriedades e UI imediatamente
+    if (state.activeBoard) {
+      const updatedActive = state.boards.find(b => b.id === state.activeBoard.id);
+      if (updatedActive) {
+        state.activeBoard = { ...state.activeBoard, ...updatedActive };
+        updateBoardViewStatusUI();
+      }
+    }
   } catch (err) {
     if (!isSilent) showLoader(false);
     console.error("Erro ao carregar murais:", err);
@@ -704,8 +719,9 @@ function renderBoardsGrid() {
         <div class="w-10 h-10 rounded-xl bg-white/90 backdrop-blur-sm shadow-md flex items-center justify-center text-xl">
           ${board.icon || '📌'}
         </div>
-        <div class="flex items-center gap-1.5">
+        <div class="flex items-center gap-1.5 flex-wrap">
           ${board.vote_mode && effectiveAdmin ? '<span class="text-[9px] uppercase font-subtitle-semibold bg-[#D75B36] text-white px-2 py-0.5 rounded-full font-bold shadow-sm">Votação</span>' : ''}
+          ${board.single_post_mode ? '<span class="text-[9px] uppercase font-subtitle-semibold bg-[#0A2334]/80 text-white/90 border border-white/20 px-2 py-0.5 rounded-full font-bold shadow-sm flex items-center gap-1"><i data-lucide="user-check" class="w-2.5 h-2.5 text-[#DC7B52]"></i> 1 Card</span>' : ''}
           ${effectiveAdmin ? `
             <span class="text-[9px] uppercase font-subtitle-semibold ${isClosed ? 'bg-gray-900/90 text-amber-300 border border-amber-500/30' : 'bg-emerald-600/90 text-white'} px-2 py-0.5 rounded-full font-bold shadow-sm flex items-center gap-1">
               ${isClosed ? '<i data-lucide="lock" class="w-2.5 h-2.5"></i> Fechado' : '<span class="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span> Aberto'}
@@ -843,9 +859,23 @@ async function toggleBoardOpenClose(boardId) {
   }
 }
 
+function getUserPostCount() {
+  if (!state.user || !state.cards) return 0;
+  const userEmail = (state.user.email || "").toLowerCase().trim();
+  return state.cards.filter(c => (c.author_email || "").toLowerCase().trim() === userEmail).length;
+}
+
+function isUserBlockedBySinglePost() {
+  if (!state.activeBoard || !state.activeBoard.single_post_mode) return false;
+  // Admins no Modo Admin têm permissão de gerenciamento; na Visão Usuário ou usuários comuns, bloqueia se >= 1
+  if (isUserAdmin() && state.viewMode === "admin") return false;
+  return getUserPostCount() >= 1;
+}
+
 function updateBoardViewStatusUI() {
   if (!state.activeBoard) return;
   const isClosed = !!state.activeBoard.is_closed;
+  const isSinglePost = !!state.activeBoard.single_post_mode;
   const effectiveAdmin = isUserAdmin();
 
   // Banner informativo de Mural Encerrado
@@ -864,17 +894,39 @@ function updateBoardViewStatusUI() {
     closedBadge.classList.toggle("hidden", !isClosed);
   }
 
-  // Botões de Adicionar Card: se o mural estiver encerrado, apenas Admins podem adicionar
+  // Badge "Votação Ativa"
+  const voteBadge = document.getElementById("board-view-vote-badge");
+  if (voteBadge) {
+    voteBadge.classList.toggle("hidden", !state.activeBoard.vote_mode);
+  }
+
+  // Badge "1 Card por Pessoa"
+  const singlePostBadge = document.getElementById("board-view-single-post-badge");
+  if (singlePostBadge) {
+    singlePostBadge.classList.toggle("hidden", !isSinglePost);
+  }
+
+  // Botões de Adicionar Card:
+  // - Se mural encerrado -> somente Admins
+  // - Se modo de participação única e usuário já postou >= 1 card -> bloqueado
   const fabAddCard = document.getElementById("btn-fab-add-card");
   const btnAddCardEmpty = document.getElementById("btn-add-card-empty");
-  const btnAddCardHeader = document.getElementById("btn-add-card-header");
+  const blockedBySingle = isUserBlockedBySinglePost();
+  const canAddCard = (!isClosed || effectiveAdmin) && !blockedBySingle;
 
-  const canAddCard = !isClosed || effectiveAdmin;
   if (fabAddCard) fabAddCard.classList.toggle("hidden", !canAddCard);
   if (btnAddCardEmpty) btnAddCardEmpty.classList.toggle("hidden", !canAddCard);
-  if (btnAddCardHeader) btnAddCardHeader.classList.toggle("hidden", !canAddCard);
 
-  // Atualiza botão de alternar status na gaveta retrátil
+  // Banner informativo para o usuário que já atingiu o limite de 1 card
+  const singlePostBanner = document.getElementById("board-single-post-user-banner");
+  if (singlePostBanner) {
+    singlePostBanner.classList.toggle("hidden", !isSinglePost || !blockedBySingle);
+  }
+
+  // Atualiza botão flutuante de votação imediatamente
+  updateFabVoteButton();
+
+  // Atualiza gaveta retrátil de ferramentas admin (botões de status, votação, apuração)
   updateAdminDrawerContext();
 }
 
@@ -1227,6 +1279,11 @@ function openNewBoardModal() {
   document.getElementById("board-icon-input").value = "📌";
   document.getElementById("board-icon-current").textContent = "📌";
 
+  const voteToggle = document.getElementById("board-vote-mode-toggle");
+  if (voteToggle) voteToggle.checked = false;
+  const singleToggle = document.getElementById("board-single-post-toggle");
+  if (singleToggle) singleToggle.checked = false;
+
   const openToggle = document.getElementById("board-open-toggle");
   if (openToggle) openToggle.checked = true;
 
@@ -1238,8 +1295,17 @@ function openNewBoardModal() {
 }
 
 function openEditBoardModal(boardId) {
-  const board = state.boards.find(b => b.id === boardId);
+  let board = state.boards.find(b => b.id === boardId);
+  if (!board && state.activeBoard && state.activeBoard.id === boardId) {
+    board = state.activeBoard;
+  }
   if (!board) return;
+
+  // Garante fallback do localStorage caso venha nulo do banco
+  const localSingle = localStorage.getItem("az_board_single_post_" + board.id);
+  const isSingle = (board.single_post_mode !== undefined && board.single_post_mode !== null)
+    ? !!board.single_post_mode
+    : (localSingle === "true");
 
   state.editingBoardId = boardId;
   document.getElementById("modal-board-title").textContent = "Configurações do Mural";
@@ -1249,6 +1315,8 @@ function openEditBoardModal(boardId) {
   document.getElementById("board-icon-current").textContent = board.icon || "📌";
   document.getElementById("board-icon-input").value = board.icon || "📌";
   document.getElementById("board-vote-mode-toggle").checked = !!board.vote_mode;
+  const singleToggle = document.getElementById("board-single-post-toggle");
+  if (singleToggle) singleToggle.checked = isSingle;
 
   const openToggle = document.getElementById("board-open-toggle");
   if (openToggle) openToggle.checked = !board.is_closed;
@@ -1272,6 +1340,7 @@ async function handleBoardFormSubmit(e) {
   const desc = document.getElementById("board-desc-input").value.trim();
   const icon = document.getElementById("board-icon-input").value || "📌";
   const voteMode = document.getElementById("board-vote-mode-toggle").checked;
+  const singlePostMode = document.getElementById("board-single-post-toggle")?.checked || false;
   const isOpen = document.getElementById("board-open-toggle")?.checked !== false;
   const isClosed = !isOpen;
 
@@ -1288,35 +1357,62 @@ async function handleBoardFormSubmit(e) {
       if (id) {
         // Edição
         localStorage.setItem("az_board_closed_" + id, isClosed ? "true" : "false");
+        localStorage.setItem("az_board_single_post_" + id, singlePostMode ? "true" : "false");
         try {
           const { error } = await supabaseClient.from("boards").update({
             title: title,
             description: desc,
             icon: icon,
             vote_mode: voteMode,
+            single_post_mode: singlePostMode,
             background_type: bgType,
             background_value: bgValue,
             is_closed: isClosed
           }).eq("id", id);
           if (error) throw error;
         } catch (dbErr) {
-          // Fallback caso a coluna is_closed ainda não tenha sido criada no banco
-          await supabaseClient.from("boards").update({
-            title: title,
-            description: desc,
-            icon: icon,
-            vote_mode: voteMode,
-            background_type: bgType,
-            background_value: bgValue
-          }).eq("id", id);
+          // Fallback caso a coluna single_post_mode ou is_closed ainda não tenha sido criada no banco
+          try {
+            await supabaseClient.from("boards").update({
+              title: title,
+              description: desc,
+              icon: icon,
+              vote_mode: voteMode,
+              background_type: bgType,
+              background_value: bgValue,
+              is_closed: isClosed
+            }).eq("id", id);
+          } catch (e2) {
+            await supabaseClient.from("boards").update({
+              title: title,
+              description: desc,
+              icon: icon,
+              vote_mode: voteMode,
+              background_type: bgType,
+              background_value: bgValue
+            }).eq("id", id);
+          }
         }
 
-        // Atualização instantânea na tela do mural ativo
+        // Atualização instantânea na tela do mural ativo e na lista de murais
+        const targetBoardInList = state.boards ? state.boards.find(b => b.id === id) : null;
+        if (targetBoardInList) {
+          targetBoardInList.title = title;
+          targetBoardInList.description = desc;
+          targetBoardInList.icon = icon;
+          targetBoardInList.vote_mode = voteMode;
+          targetBoardInList.single_post_mode = singlePostMode;
+          targetBoardInList.background_type = bgType;
+          targetBoardInList.background_value = bgValue;
+          targetBoardInList.is_closed = isClosed;
+        }
+
         if (state.activeBoard && state.activeBoard.id === id) {
           state.activeBoard.title = title;
           state.activeBoard.description = desc;
           state.activeBoard.icon = icon;
           state.activeBoard.vote_mode = voteMode;
+          state.activeBoard.single_post_mode = singlePostMode;
           state.activeBoard.background_type = bgType;
           state.activeBoard.background_value = bgValue;
           state.activeBoard.is_closed = isClosed;
@@ -1337,6 +1433,7 @@ async function handleBoardFormSubmit(e) {
             description: desc,
             icon: icon,
             vote_mode: voteMode,
+            single_post_mode: singlePostMode,
             background_type: bgType,
             background_value: bgValue,
             created_by: state.user?.email || MASTER_ADMIN,
@@ -1345,23 +1442,39 @@ async function handleBoardFormSubmit(e) {
           if (error) throw error;
           createdBoard = data;
         } catch (dbErr) {
-          // Fallback se is_closed não estiver no schema
-          const { data, error } = await supabaseClient.from("boards").insert([{
-            title: title,
-            description: desc,
-            icon: icon,
-            vote_mode: voteMode,
-            background_type: bgType,
-            background_value: bgValue,
-            created_by: state.user?.email || MASTER_ADMIN
-          }]).select().single();
-          if (error) throw error;
-          createdBoard = data;
+          try {
+            const { data, error } = await supabaseClient.from("boards").insert([{
+              title: title,
+              description: desc,
+              icon: icon,
+              vote_mode: voteMode,
+              background_type: bgType,
+              background_value: bgValue,
+              created_by: state.user?.email || MASTER_ADMIN,
+              is_closed: isClosed
+            }]).select().single();
+            if (error) throw error;
+            createdBoard = data;
+          } catch (e2) {
+            const { data, error } = await supabaseClient.from("boards").insert([{
+              title: title,
+              description: desc,
+              icon: icon,
+              vote_mode: voteMode,
+              background_type: bgType,
+              background_value: bgValue,
+              created_by: state.user?.email || MASTER_ADMIN
+            }]).select().single();
+            if (error) throw error;
+            createdBoard = data;
+          }
         }
 
         if (createdBoard) {
           createdBoard.is_closed = isClosed;
+          createdBoard.single_post_mode = singlePostMode;
           localStorage.setItem("az_board_closed_" + createdBoard.id, isClosed ? "true" : "false");
+          localStorage.setItem("az_board_single_post_" + createdBoard.id, singlePostMode ? "true" : "false");
           showToast("Mural criado com sucesso!", "success");
           openBoard(createdBoard);
           setTimeout(() => {
@@ -1507,6 +1620,7 @@ async function loadCards(boardId, isSilent = false) {
 
     updateFabVoteButton();
     renderCardsList();
+    updateBoardViewStatusUI();
   } catch (err) {
     if (!isSilent) showLoader(false);
     console.error("Erro ao carregar cards:", err);
@@ -1521,6 +1635,8 @@ function updateFabVoteButton() {
     btnFabVote.classList.add("hidden");
     return;
   }
+
+  btnFabVote.classList.remove("hidden");
 
   const hasVoted = state.cards && state.cards.some(c => c.has_voted);
   if (hasVoted) {
@@ -1849,6 +1965,11 @@ function openNewCardModal() {
     return;
   }
 
+  if (isUserBlockedBySinglePost()) {
+    showToast("Este mural opera com participação única (1 card por pessoa) e você já enviou seu post!", "warning");
+    return;
+  }
+
   state.editingCardId = null;
   state.pendingMediaFile = null;
   const form = document.getElementById("form-card");
@@ -1953,7 +2074,11 @@ async function handleCardFormSubmit(e) {
 
     // 2. Gravação no Banco PostgreSQL
     if (id) {
-      // Edição
+      // Edição: preserva estritamente o autor original (nome, email e foto/avatar)
+      const existing = state.cards.find(c => c.id === id);
+      const isOriginalAuthor = existing && state.user?.email && 
+        String(existing.author_email).toLowerCase().trim() === String(state.user.email).toLowerCase().trim();
+
       const updatePayload = {
         title: title,
         content: content,
@@ -1962,7 +2087,10 @@ async function handleCardFormSubmit(e) {
         media_type: mediaType
       };
       if (mediaUrl) updatePayload.media_url = mediaUrl;
-      if (state.user?.avatarUrl) updatePayload.author_avatar = state.user.avatarUrl;
+      // Atualiza o avatar apenas se for o próprio autor editando seu próprio card
+      if (isOriginalAuthor && state.user?.avatarUrl) {
+        updatePayload.author_avatar = state.user.avatarUrl;
+      }
 
       let { error } = await supabaseClient.from("cards").update(updatePayload).eq("id", id);
       if (error && (error.message?.includes("author_avatar") || error.code === "PGRST204")) {
@@ -1973,7 +2101,13 @@ async function handleCardFormSubmit(e) {
       if (error) throw error;
       showToast("Card atualizado!", "success");
     } else {
-      // Criação
+      // Criação: valida se usuário já atingiu o limite de 1 card
+      if (isUserBlockedBySinglePost()) {
+        showToast("Você já atingiu o limite de 1 card para este mural.", "warning");
+        showLoader(false);
+        return;
+      }
+
       const insertPayload = {
         board_id: state.activeBoard.id,
         title: title,
@@ -2006,9 +2140,81 @@ async function handleCardFormSubmit(e) {
   }
 }
 
+/**
+ * Comprime e redimensiona uma imagem no navegador antes do upload.
+ * Reduz fotos pesadas de celulares (5-10MB) para ~150-250KB sem perda visual perceptível,
+ * economizando até 95% de banda e acelerando o carregamento dos cards para todos.
+ */
+async function compressImageFile(file, options = {}) {
+  if (!file || !file.type.startsWith("image/") || file.type === "image/gif" || file.type === "image/svg+xml") {
+    return file;
+  }
+
+  const maxWidth = options.maxWidth || 1600;
+  const maxHeight = options.maxHeight || 1600;
+  const quality = options.quality !== undefined ? options.quality : 0.82;
+
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve(file);
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => resolve(file);
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        // Se já couber nos limites e for menor que 300KB, mantém original
+        if (width <= maxWidth && height <= maxHeight && file.size < 300 * 1024) {
+          return resolve(file);
+        }
+
+        // Mantém a proporção de aspecto
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          if (!blob || blob.size >= file.size) {
+            return resolve(file);
+          }
+
+          const originalName = file.name || "foto.jpg";
+          const newName = originalName.replace(/\.[^.]+$/, "") + ".jpg";
+          const compressedFile = new File([blob], newName, {
+            type: "image/jpeg",
+            lastModified: Date.now()
+          });
+
+          console.log(`[AZ Board] Foto comprimida: ${(file.size / 1024).toFixed(0)}KB ➔ ${(compressedFile.size / 1024).toFixed(0)}KB (-${Math.round((1 - compressedFile.size / file.size) * 100)}%)`);
+          resolve(compressedFile);
+        }, "image/jpeg", quality);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 // Upload direto para o bucket board-media do Supabase Storage
 async function uploadImageToSupabaseStorage(file) {
-  const fileExt = file.name.split('.').pop();
+  const fileToUpload = await compressImageFile(file, { maxWidth: 1600, maxHeight: 1600, quality: 0.82 });
+  const fileExt = fileToUpload.name.split('.').pop();
   const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
   const filePath = `uploads/${fileName}`;
 
@@ -2019,8 +2225,8 @@ async function uploadImageToSupabaseStorage(file) {
 
   const { data, error } = await supabaseClient.storage
     .from("board-media")
-    .upload(filePath, file, {
-      cacheControl: "3600",
+    .upload(filePath, fileToUpload, {
+      cacheControl: "31536000",
       upsert: false
     });
 
@@ -2598,6 +2804,47 @@ function setupEventListeners() {
   document.getElementById("btn-board-layout-sort")?.addEventListener("click", openLayoutSortModal);
   document.getElementById("btn-save-layout-sort")?.addEventListener("click", saveBoardLayoutAndSort);
 
+  // Alternância instantânea ao mudar o modo de votação no modal (atualização na hora)
+  document.getElementById("board-vote-mode-toggle")?.addEventListener("change", async (e) => {
+    const isChecked = e.target.checked;
+    const boardId = document.getElementById("board-id-hidden")?.value || state.activeBoard?.id;
+    
+    if (state.activeBoard && (!boardId || state.activeBoard.id === boardId)) {
+      state.activeBoard.vote_mode = isChecked;
+      updateBoardViewStatusUI();
+    }
+    if (boardId) {
+      const bObj = (state.boards || []).find(b => b.id === boardId);
+      if (bObj) bObj.vote_mode = isChecked;
+      try {
+        await supabaseClient.from("boards").update({ vote_mode: isChecked }).eq("id", boardId);
+      } catch (err) {
+        console.warn("Auto-sync vote_mode failed:", err);
+      }
+    }
+  });
+
+  // Alternância instantânea ao mudar o modo de participação única no modal
+  document.getElementById("board-single-post-toggle")?.addEventListener("change", async (e) => {
+    const isChecked = e.target.checked;
+    const boardId = document.getElementById("board-id-hidden")?.value || state.activeBoard?.id;
+
+    if (state.activeBoard && (!boardId || state.activeBoard.id === boardId)) {
+      state.activeBoard.single_post_mode = isChecked;
+      updateBoardViewStatusUI();
+    }
+    if (boardId) {
+      const bObj = (state.boards || []).find(b => b.id === boardId);
+      if (bObj) bObj.single_post_mode = isChecked;
+      localStorage.setItem("az_board_single_post_" + boardId, isChecked ? "true" : "false");
+      try {
+        await supabaseClient.from("boards").update({ single_post_mode: isChecked }).eq("id", boardId);
+      } catch (err) {
+        console.warn("Auto-sync single_post_mode failed:", err);
+      }
+    }
+  });
+
   // Criação de Card & Votação Flutuante
   document.getElementById("btn-add-card-header")?.addEventListener("click", openNewCardModal);
   document.getElementById("btn-add-card-empty")?.addEventListener("click", openNewCardModal);
@@ -2647,17 +2894,29 @@ function setupEventListeners() {
     document.getElementById("card-file-input")?.click();
   });
 
-  document.getElementById("card-file-input")?.addEventListener("change", (e) => {
+  document.getElementById("card-file-input")?.addEventListener("change", async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    state.pendingMediaFile = file;
+
+    // Redimensiona e comprime automaticamente no navegador
+    const optimized = await compressImageFile(file);
+    state.pendingMediaFile = optimized;
 
     const reader = new FileReader();
     reader.onload = (evt) => {
       document.getElementById("card-media-preview-container")?.classList.remove("hidden");
-      document.getElementById("card-media-preview").innerHTML = `<img src="${evt.target.result}" class="max-h-36 object-contain rounded">`;
+      const kb = (optimized.size / 1024).toFixed(0);
+      document.getElementById("card-media-preview").innerHTML = `
+        <div class="relative inline-block group">
+          <img src="${evt.target.result}" class="max-h-36 object-contain rounded shadow">
+          <span class="absolute bottom-1 right-1 bg-black/75 text-emerald-300 text-[10px] font-mono px-1.5 py-0.5 rounded backdrop-blur-xs flex items-center gap-1 shadow-sm">
+            <i data-lucide="zap" class="w-2.5 h-2.5 text-emerald-400"></i> ${kb} KB otimizada
+          </span>
+        </div>
+      `;
+      if (window.lucide) lucide.createIcons();
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(optimized);
   });
 
   document.getElementById("btn-clear-media-preview")?.addEventListener("click", () => {
@@ -2856,7 +3115,8 @@ function updateLiveBackgroundPreview(type, value) {
 async function uploadBoardBackgroundToStorage(file) {
   if (!supabaseClient || !file) return;
 
-  const fileExt = file.name.split('.').pop();
+  const fileToUpload = await compressImageFile(file, { maxWidth: 1920, maxHeight: 1920, quality: 0.85 });
+  const fileExt = fileToUpload.name.split('.').pop();
   const fileName = `bg_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
   const filePath = `backgrounds/${fileName}`;
 
@@ -2868,8 +3128,8 @@ async function uploadBoardBackgroundToStorage(file) {
   try {
     const { error } = await supabaseClient.storage
       .from("board-media")
-      .upload(filePath, file, {
-        cacheControl: "3600",
+      .upload(filePath, fileToUpload, {
+        cacheControl: "31536000",
         upsert: false
       });
 
