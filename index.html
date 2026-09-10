@@ -543,6 +543,16 @@
             <input type="url" id="card-youtube-url-input" placeholder="https://www.youtube.com/watch?v=... ou link público do Drive" class="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs focus:outline-none focus:border-[#D75B36] font-body" />
           </div>
 
+          <!-- Campo de Data do Evento / Foto (exibido se ativado nas propriedades do mural) -->
+          <div id="card-event-date-container" class="hidden">
+            <label class="block font-subtitle-semibold text-xs text-[#0A2334] mb-1 flex items-center gap-1.5">
+              <i data-lucide="calendar" class="w-3.5 h-3.5 text-[#D75B36]"></i>
+              Data do Evento / Foto
+            </label>
+            <input type="date" id="card-event-date-input" class="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs focus:outline-none focus:border-[#D75B36] font-body text-gray-700 bg-white" />
+            <p class="text-[10px] text-gray-400 mt-1">Usada para ordenação cronológica e exibição de marcos na Linha do Tempo.</p>
+          </div>
+
           <!-- Conteúdo / Descrição -->
           <div>
             <label class="block font-subtitle-semibold text-xs text-[#0A2334] mb-1">Descrição / Conteúdo do Card</label>
@@ -636,9 +646,12 @@
 
           <!-- Modo Votação -->
           <div class="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
-            <div>
-              <span class="font-subtitle-semibold text-xs text-[#0A2334] block">Modo de Votação (Enquete Oficial)</span>
-              <span class="text-[10px] text-gray-500">Permite aos colaboradores votarem no melhor card.</span>
+            <div class="pr-2">
+              <span class="font-subtitle-semibold text-xs text-[#0A2334] block flex items-center gap-1.5">
+                <i data-lucide="vote" class="w-3.5 h-3.5 text-[#D75B36]"></i>
+                Modo de Votação (Enquete Oficial)
+              </span>
+              <span class="text-[10px] text-gray-500 block mt-0.5">Permite aos colaboradores votarem no melhor card.</span>
             </div>
             <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
               <input type="checkbox" id="board-vote-mode-toggle" class="sr-only peer">
@@ -661,13 +674,31 @@
             </label>
           </div>
 
+          <!-- Campo de Data do Evento / Foto nos Cards -->
+          <div class="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
+            <div class="pr-2">
+              <span class="font-subtitle-semibold text-xs text-[#0A2334] block flex items-center gap-1.5">
+                <i data-lucide="calendar-days" class="w-3.5 h-3.5 text-[#D75B36]"></i>
+                Habilitar Campo de Data nos Cards
+              </span>
+              <span class="text-[10px] text-gray-500 block mt-0.5">Adiciona campo de data nos cards para marcos e ordenação cronológica personalizada (ideal para Linha do Tempo).</span>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+              <input type="checkbox" id="board-event-date-toggle" class="sr-only peer">
+              <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#D75B36]"></div>
+            </label>
+          </div>
+
           <!-- Status do Mural (Aberto vs Encerrado) -->
           <div class="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
-            <div>
-              <span class="font-subtitle-semibold text-xs text-[#0A2334] block">Mural Aberto para Participação</span>
-              <span class="text-[10px] text-gray-500">Se desativado, o mural é encerrado (somente leitura), impedindo a criação de novos cards.</span>
+            <div class="pr-2">
+              <span class="font-subtitle-semibold text-xs text-[#0A2334] block flex items-center gap-1.5">
+                <i data-lucide="lock-open" class="w-3.5 h-3.5 text-emerald-600"></i>
+                Mural Aberto para Participação
+              </span>
+              <span class="text-[10px] text-gray-500 block mt-0.5">Se desativado, o mural é encerrado (somente leitura), impedindo a criação de novos cards.</span>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
+            <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
               <input type="checkbox" id="board-open-toggle" class="sr-only peer" checked>
               <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
             </label>
@@ -1132,6 +1163,31 @@
                 </div>
               </label>
 
+              <!-- Ordenação por Data do Evento (Exclusivo quando ativado no mural) -->
+              <div id="sort-opt-event-date-container" class="col-span-2 grid grid-cols-2 gap-2 hidden">
+                <label class="cursor-pointer">
+                  <input type="radio" name="opt_board_sort" value="event-date-asc" id="sort-opt-event-date-asc" class="sr-only peer">
+                  <div class="p-2.5 rounded-xl border border-gray-200 peer-checked:border-[#173057] peer-checked:bg-slate-50 peer-checked:ring-1 peer-checked:ring-[#173057] transition-all flex items-center gap-2">
+                    <i data-lucide="calendar" class="w-4 h-4 text-emerald-600 flex-shrink-0"></i>
+                    <div class="min-w-0">
+                      <span class="font-subtitle-semibold text-xs text-gray-800 block truncate">Data do Evento (Antigos 1º)</span>
+                      <span class="text-[9px] text-gray-500 block truncate">Cronológico crescente</span>
+                    </div>
+                  </div>
+                </label>
+
+                <label class="cursor-pointer">
+                  <input type="radio" name="opt_board_sort" value="event-date-desc" id="sort-opt-event-date-desc" class="sr-only peer">
+                  <div class="p-2.5 rounded-xl border border-gray-200 peer-checked:border-[#173057] peer-checked:bg-slate-50 peer-checked:ring-1 peer-checked:ring-[#173057] transition-all flex items-center gap-2">
+                    <i data-lucide="calendar-days" class="w-4 h-4 text-cyan-600 flex-shrink-0"></i>
+                    <div class="min-w-0">
+                      <span class="font-subtitle-semibold text-xs text-gray-800 block truncate">Data do Evento (Recentes 1º)</span>
+                      <span class="text-[9px] text-gray-500 block truncate">Cronológico decrescente</span>
+                    </div>
+                  </div>
+                </label>
+              </div>
+
               <!-- Randômica / Aleatória -->
               <label class="cursor-pointer col-span-2">
                 <input type="radio" name="opt_board_sort" value="random" id="sort-opt-random" class="sr-only peer">
@@ -1188,6 +1244,6 @@
   </div>
 
   <!-- Script Principal da Aplicação -->
-  <script src="app.js?v=1.3"></script>
+  <script src="app.js?v=1.5"></script>
 </body>
 </html>
