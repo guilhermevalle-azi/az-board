@@ -170,7 +170,7 @@
             <h2 class="font-title text-2xl sm:text-3xl text-white mt-0.5 mb-1.5">Meus Murais & Ideias</h2>
             <p class="font-body text-xs sm:text-sm text-[#CDCDCD] max-w-xl">Crie murais para debater projetos, compartilhar fotos e vídeos, comentar e votar nas melhores ideias em tempo real.</p>
           </div>
-          <button id="btn-create-board-hero" class="relative z-10 self-start sm:self-center px-4 py-2.5 bg-[#D75B36] hover:bg-[#DC7B52] text-white rounded-2xl font-subtitle-semibold text-xs sm:text-sm shadow-lg shadow-[#D75B36]/30 flex items-center gap-2 hover:scale-105 active:scale-95 transition-all">
+          <button id="btn-create-board-hero" class="hidden relative z-10 self-start sm:self-center px-4 py-2.5 bg-[#D75B36] hover:bg-[#DC7B52] text-white rounded-2xl font-subtitle-semibold text-xs sm:text-sm shadow-lg shadow-[#D75B36]/30 flex items-center gap-2 hover:scale-105 active:scale-95 transition-all">
             <i data-lucide="plus" class="w-4 h-4"></i>
             <span>CRIAR NOVO MURAL</span>
           </button>
@@ -188,7 +188,7 @@
           </div>
           <h3 class="font-title text-lg text-white mb-1">Nenhum mural criado ainda</h3>
           <p class="font-body text-xs text-[#CDCDCD] max-w-md mx-auto mb-4">Crie o primeiro mural colaborativo para a equipe começar a postar fotos, vídeos e ideias.</p>
-          <button id="btn-create-board-empty" class="px-4 py-2 bg-[#D75B36] text-white rounded-xl text-xs font-subtitle-semibold hover:bg-[#DC7B52]">
+          <button id="btn-create-board-empty" class="hidden px-4 py-2 bg-[#D75B36] text-white rounded-xl text-xs font-subtitle-semibold hover:bg-[#DC7B52]">
             + Criar Primeiro Mural
           </button>
         </div>
@@ -288,16 +288,18 @@
 
         <!-- Cabeçalho Limpo Integrado no Mural (Diretamente no Quadro) -->
         <div class="px-4 sm:px-8 pt-8 pb-3 max-w-[1600px] mx-auto w-full flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div class="flex items-start sm:items-center gap-4">
-            <div class="text-4xl sm:text-5xl select-none drop-shadow-md" id="board-view-icon">📌</div>
-            <div>
-              <div class="flex items-center gap-2.5">
+          <div class="flex items-start gap-4 flex-1 min-w-0">
+            <div class="text-4xl sm:text-5xl select-none drop-shadow-md flex-shrink-0 mt-0.5" id="board-view-icon">📌</div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center flex-wrap gap-2.5">
                 <h1 class="font-title text-2xl sm:text-3xl lg:text-4xl text-white font-semibold tracking-tight drop-shadow-md leading-tight" id="board-view-title">Título do Quadro</h1>
                 <span id="board-view-vote-badge" class="hidden text-[9px] uppercase font-subtitle-semibold bg-[#D75B36] text-white px-2.5 py-0.5 rounded-full font-bold shadow-sm">
                   Votação Ativa
                 </span>
               </div>
-              <p class="font-body text-xs sm:text-sm text-white/85 drop-shadow max-w-2xl mt-1 leading-relaxed" id="board-view-desc">Descrição do mural...</p>
+              <div id="board-view-desc-box" class="mt-2 p-3.5 bg-black/25 backdrop-blur-md rounded-2xl border border-white/15 max-w-3xl shadow-sm">
+                <p class="font-body text-xs sm:text-sm text-white/95 leading-relaxed drop-shadow-sm whitespace-pre-line" id="board-view-desc">Descrição do mural...</p>
+              </div>
             </div>
           </div>
 
@@ -699,6 +701,7 @@
         </div>
 
         <div class="p-4 overflow-y-auto flex-1">
+          <div id="vote-modal-notice" class="hidden"></div>
           <p class="font-body text-xs text-gray-600 mb-3">Selecione o melhor card/ideia deste mural para registrar seu voto único:</p>
           <div id="vote-options-list" class="space-y-2">
             <!-- Renderizado dinamicamente -->
@@ -738,8 +741,22 @@
           <!-- Tabela de Classificação -->
           <div>
             <h4 class="font-subtitle-semibold text-xs text-[#0A2334] mb-2 uppercase tracking-wide">Ranking das Ideias</h4>
-            <div id="vote-rankings-table" class="space-y-1.5 max-h-52 overflow-y-auto">
+            <div id="vote-rankings-table" class="space-y-1.5 max-h-48 overflow-y-auto">
               <!-- Renderizado dinamicamente -->
+            </div>
+          </div>
+
+          <!-- Relação Detalhada: Quem votou em quem -->
+          <div class="pt-3 border-t border-gray-100">
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="font-subtitle-semibold text-xs text-[#0A2334] uppercase tracking-wide flex items-center gap-1.5">
+                <i data-lucide="users" class="w-3.5 h-3.5 text-[#D75B36]"></i>
+                <span>Relação de Votos (Quem votou em quem)</span>
+              </h4>
+              <span id="vote-stats-total-voters" class="text-[11px] text-gray-500 font-body">0 votos registrados</span>
+            </div>
+            <div id="vote-voters-breakdown" class="space-y-2 max-h-52 overflow-y-auto">
+              <!-- Renderizado dinamicamente com os votantes de cada card -->
             </div>
           </div>
         </div>
