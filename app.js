@@ -622,10 +622,15 @@ async function loadBoards(isSilent = false) {
       const isSinglePost = (b.single_post_mode !== undefined && b.single_post_mode !== null)
         ? !!b.single_post_mode
         : (localSingle === "true");
+      const localEventDate = localStorage.getItem("az_board_has_event_date_" + b.id);
+      const hasEventDate = (b.has_event_date !== undefined && b.has_event_date !== null)
+        ? !!b.has_event_date
+        : (localEventDate === "true");
       return {
         ...b,
         is_closed: isClosed,
         single_post_mode: isSinglePost,
+        has_event_date: hasEventDate,
         card_count: b.cards ? b.cards.length : 0
       };
     });
@@ -701,7 +706,7 @@ function renderBoardsGrid() {
 
   visibleBoards.forEach(board => {
     const cardEl = document.createElement("div");
-    cardEl.className = "rounded-2xl overflow-hidden border border-slate-200/90 shadow-md hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 flex flex-col cursor-pointer group relative bg-white ring-1 ring-black/5";
+    cardEl.className = "rounded-2xl border border-slate-200/90 shadow-md hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 flex flex-col cursor-pointer group relative bg-white ring-1 ring-black/5";
     
     // Background header
     let bgStyle = "background: linear-gradient(135deg, #0A2334 0%, #173057 100%);";
@@ -715,46 +720,54 @@ function renderBoardsGrid() {
     const isClosed = !!board.is_closed;
 
     cardEl.innerHTML = `
-      <div class="h-24 p-3 relative flex items-start justify-between" style="${bgStyle}">
-        <div class="w-10 h-10 rounded-xl bg-white/90 backdrop-blur-sm shadow-md flex items-center justify-center text-xl">
+      <div class="h-24 p-3 relative flex items-start gap-2.5 rounded-t-2xl" style="${bgStyle}">
+        <div class="w-10 h-10 rounded-xl bg-white/90 backdrop-blur-sm shadow-md flex items-center justify-center text-xl flex-shrink-0">
           ${board.icon || '📌'}
         </div>
-        <div class="flex items-center gap-1.5 flex-wrap">
-          ${board.vote_mode && effectiveAdmin ? '<span class="text-[9px] uppercase font-subtitle-semibold bg-[#D75B36] text-white px-2 py-0.5 rounded-full font-bold shadow-sm">Votação</span>' : ''}
-          ${board.single_post_mode ? '<span class="text-[9px] uppercase font-subtitle-semibold bg-[#0A2334]/80 text-white/90 border border-white/20 px-2 py-0.5 rounded-full font-bold shadow-sm flex items-center gap-1"><i data-lucide="user-check" class="w-2.5 h-2.5 text-[#DC7B52]"></i> 1 Card</span>' : ''}
+        
+        <!-- Tags / Badges com quebra limpa -->
+        <div class="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap pt-0.5">
+          ${board.vote_mode && effectiveAdmin ? '<span class="text-[9px] uppercase font-subtitle-semibold bg-[#D75B36] text-white px-2 py-0.5 rounded-full font-bold shadow-sm flex-shrink-0">Votação</span>' : ''}
+          ${board.single_post_mode ? '<span class="text-[9px] uppercase font-subtitle-semibold bg-[#0A2334]/85 text-white/95 border border-white/25 px-2 py-0.5 rounded-full font-bold shadow-sm flex items-center gap-1 flex-shrink-0"><i data-lucide="user-check" class="w-2.5 h-2.5 text-[#DC7B52]"></i> 1 Card</span>' : ''}
+          ${board.has_event_date ? '<span class="text-[9px] uppercase font-subtitle-semibold bg-[#173057]/85 text-white/95 border border-white/25 px-2 py-0.5 rounded-full font-bold shadow-sm flex items-center gap-1 flex-shrink-0"><i data-lucide="calendar" class="w-2.5 h-2.5 text-cyan-300"></i> Data</span>' : ''}
           ${effectiveAdmin ? `
-            <span class="text-[9px] uppercase font-subtitle-semibold ${isClosed ? 'bg-gray-900/90 text-amber-300 border border-amber-500/30' : 'bg-emerald-600/90 text-white'} px-2 py-0.5 rounded-full font-bold shadow-sm flex items-center gap-1">
+            <span class="text-[9px] uppercase font-subtitle-semibold ${isClosed ? 'bg-gray-900/90 text-amber-300 border border-amber-500/30' : 'bg-emerald-600/90 text-white'} px-2 py-0.5 rounded-full font-bold shadow-sm flex items-center gap-1 flex-shrink-0">
               ${isClosed ? '<i data-lucide="lock" class="w-2.5 h-2.5"></i> Fechado' : '<span class="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span> Aberto'}
             </span>
           ` : ''}
+        </div>
+
+        <!-- Botão de Ação / Menu no canto superior direito fixo -->
+        <div class="flex-shrink-0">
           ${effectiveAdmin ? `
             <div class="relative group/menu">
-              <button type="button" class="btn-board-menu p-1 text-white/80 hover:text-white rounded-lg bg-black/20 hover:bg-black/40">
-                <i data-lucide="more-vertical" class="w-3.5 h-3.5"></i>
+              <button type="button" class="btn-board-menu w-7 h-7 flex items-center justify-center text-white/90 hover:text-white rounded-lg bg-black/30 hover:bg-black/50 backdrop-blur-xs transition-colors cursor-pointer shadow-xs">
+                <i data-lucide="more-vertical" class="w-4 h-4"></i>
               </button>
-              <div class="hidden group-hover/menu:block absolute right-0 top-6 w-40 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-20">
-                <button type="button" class="btn-share-board w-full text-left px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center gap-1.5 cursor-pointer" data-id="${board.id}">
-                  <i data-lucide="share-2" class="w-3 h-3 text-emerald-600"></i> Compartilhar
+              <div class="hidden group-hover/menu:block absolute right-0 top-8 w-44 bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5 z-30 transform origin-top-right transition-all">
+                <button type="button" class="btn-share-board w-full text-left px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer font-medium" data-id="${board.id}">
+                  <i data-lucide="share-2" class="w-3.5 h-3.5 text-emerald-600"></i> Compartilhar
                 </button>
-                <button type="button" class="btn-toggle-status-board w-full text-left px-3 py-1.5 text-xs ${isClosed ? 'text-emerald-700 hover:bg-emerald-50' : 'text-amber-700 hover:bg-amber-50'} flex items-center gap-1.5 cursor-pointer" data-id="${board.id}">
-                  <i data-lucide="${isClosed ? 'unlock' : 'lock'}" class="w-3 h-3"></i> ${isClosed ? 'Reabrir Mural' : 'Encerrar Mural'}
+                <button type="button" class="btn-toggle-status-board w-full text-left px-3 py-1.5 text-xs ${isClosed ? 'text-emerald-700 hover:bg-emerald-50' : 'text-amber-700 hover:bg-amber-50'} flex items-center gap-2 cursor-pointer font-medium" data-id="${board.id}">
+                  <i data-lucide="${isClosed ? 'unlock' : 'lock'}" class="w-3.5 h-3.5"></i> ${isClosed ? 'Reabrir Mural' : 'Encerrar Mural'}
                 </button>
-                <button type="button" class="btn-edit-board w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 cursor-pointer" data-id="${board.id}">
-                  <i data-lucide="edit-3" class="w-3 h-3 text-[#173057]"></i> Editar
+                <button type="button" class="btn-edit-board w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2 cursor-pointer font-medium" data-id="${board.id}">
+                  <i data-lucide="edit-3" class="w-3.5 h-3.5 text-[#173057]"></i> Editar Mural
                 </button>
-                <button type="button" class="btn-delete-board w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-1.5 cursor-pointer" data-id="${board.id}">
-                  <i data-lucide="trash-2" class="w-3 h-3"></i> Excluir
+                <div class="my-1 border-t border-gray-100"></div>
+                <button type="button" class="btn-delete-board w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 cursor-pointer font-medium" data-id="${board.id}">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Excluir Mural
                 </button>
               </div>
             </div>
           ` : `
-            <button type="button" class="btn-share-board p-1 text-white/80 hover:text-white rounded-lg bg-black/20 hover:bg-black/40" data-id="${board.id}" title="Compartilhar Link">
+            <button type="button" class="btn-share-board w-7 h-7 flex items-center justify-center text-white/90 hover:text-white rounded-lg bg-black/30 hover:bg-black/50 backdrop-blur-xs transition-colors cursor-pointer shadow-xs" data-id="${board.id}" title="Compartilhar Link">
               <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
             </button>
           `}
         </div>
       </div>
-      <div class="p-4 flex-1 flex flex-col justify-between bg-white">
+      <div class="p-4 flex-1 flex flex-col justify-between bg-white rounded-b-2xl">
         <div>
           <h3 class="font-subtitle text-base text-[#0A2334] line-clamp-1 group-hover:text-[#D75B36] transition-colors font-bold tracking-wide">${escapeHtml(board.title)}</h3>
           <p class="font-body text-xs text-gray-500 line-clamp-2 mt-1">${escapeHtml(board.description || 'Sem descrição.')}</p>
@@ -1151,6 +1164,12 @@ function openBoard(board) {
   // Status Aberto/Encerrado e botões de adicionar card
   updateBoardViewStatusUI();
 
+  // Garante persistência de data personalizada
+  const localEventDate = localStorage.getItem("az_board_has_event_date_" + board.id);
+  if (board.has_event_date === undefined || board.has_event_date === null) {
+    board.has_event_date = (localEventDate === "true");
+  }
+
   // Configuração de Layout e Ordenação do mural
   state.currentLayout = board.layout_mode || board.layout || localStorage.getItem(`az_board_layout_${board.id}`) || 'masonry';
   state.currentSort = board.sort_mode || board.sort_order || localStorage.getItem(`az_board_sort_${board.id}`) || 'recent';
@@ -1283,6 +1302,8 @@ function openNewBoardModal() {
   if (voteToggle) voteToggle.checked = false;
   const singleToggle = document.getElementById("board-single-post-toggle");
   if (singleToggle) singleToggle.checked = false;
+  const eventDateToggle = document.getElementById("board-event-date-toggle");
+  if (eventDateToggle) eventDateToggle.checked = false;
 
   const openToggle = document.getElementById("board-open-toggle");
   if (openToggle) openToggle.checked = true;
@@ -1307,6 +1328,11 @@ function openEditBoardModal(boardId) {
     ? !!board.single_post_mode
     : (localSingle === "true");
 
+  const localEventDate = localStorage.getItem("az_board_has_event_date_" + board.id);
+  const hasEventDate = (board.has_event_date !== undefined && board.has_event_date !== null)
+    ? !!board.has_event_date
+    : (localEventDate === "true");
+
   state.editingBoardId = boardId;
   document.getElementById("modal-board-title").textContent = "Configurações do Mural";
   document.getElementById("board-id-hidden").value = board.id;
@@ -1317,6 +1343,9 @@ function openEditBoardModal(boardId) {
   document.getElementById("board-vote-mode-toggle").checked = !!board.vote_mode;
   const singleToggle = document.getElementById("board-single-post-toggle");
   if (singleToggle) singleToggle.checked = isSingle;
+
+  const eventDateToggle = document.getElementById("board-event-date-toggle");
+  if (eventDateToggle) eventDateToggle.checked = hasEventDate;
 
   const openToggle = document.getElementById("board-open-toggle");
   if (openToggle) openToggle.checked = !board.is_closed;
@@ -1341,6 +1370,7 @@ async function handleBoardFormSubmit(e) {
   const icon = document.getElementById("board-icon-input").value || "📌";
   const voteMode = document.getElementById("board-vote-mode-toggle").checked;
   const singlePostMode = document.getElementById("board-single-post-toggle")?.checked || false;
+  const hasEventDate = document.getElementById("board-event-date-toggle")?.checked || false;
   const isOpen = document.getElementById("board-open-toggle")?.checked !== false;
   const isClosed = !isOpen;
 
@@ -1358,6 +1388,7 @@ async function handleBoardFormSubmit(e) {
         // Edição
         localStorage.setItem("az_board_closed_" + id, isClosed ? "true" : "false");
         localStorage.setItem("az_board_single_post_" + id, singlePostMode ? "true" : "false");
+        localStorage.setItem("az_board_has_event_date_" + id, hasEventDate ? "true" : "false");
         try {
           const { error } = await supabaseClient.from("boards").update({
             title: title,
@@ -1365,19 +1396,21 @@ async function handleBoardFormSubmit(e) {
             icon: icon,
             vote_mode: voteMode,
             single_post_mode: singlePostMode,
+            has_event_date: hasEventDate,
             background_type: bgType,
             background_value: bgValue,
             is_closed: isClosed
           }).eq("id", id);
           if (error) throw error;
         } catch (dbErr) {
-          // Fallback caso a coluna single_post_mode ou is_closed ainda não tenha sido criada no banco
+          // Fallback caso a coluna has_event_date, single_post_mode ou is_closed ainda não tenha sido criada no banco
           try {
             await supabaseClient.from("boards").update({
               title: title,
               description: desc,
               icon: icon,
               vote_mode: voteMode,
+              single_post_mode: singlePostMode,
               background_type: bgType,
               background_value: bgValue,
               is_closed: isClosed
@@ -1402,6 +1435,7 @@ async function handleBoardFormSubmit(e) {
           targetBoardInList.icon = icon;
           targetBoardInList.vote_mode = voteMode;
           targetBoardInList.single_post_mode = singlePostMode;
+          targetBoardInList.has_event_date = hasEventDate;
           targetBoardInList.background_type = bgType;
           targetBoardInList.background_value = bgValue;
           targetBoardInList.is_closed = isClosed;
@@ -1413,6 +1447,7 @@ async function handleBoardFormSubmit(e) {
           state.activeBoard.icon = icon;
           state.activeBoard.vote_mode = voteMode;
           state.activeBoard.single_post_mode = singlePostMode;
+          state.activeBoard.has_event_date = hasEventDate;
           state.activeBoard.background_type = bgType;
           state.activeBoard.background_value = bgValue;
           state.activeBoard.is_closed = isClosed;
@@ -1422,6 +1457,7 @@ async function handleBoardFormSubmit(e) {
           document.getElementById("board-view-desc").textContent = desc;
           applyBoardBackground(state.activeBoard);
           updateBoardViewStatusUI();
+          renderCardsList();
         }
         showToast("Mural atualizado com sucesso!", "success");
       } else {
@@ -1434,6 +1470,7 @@ async function handleBoardFormSubmit(e) {
             icon: icon,
             vote_mode: voteMode,
             single_post_mode: singlePostMode,
+            has_event_date: hasEventDate,
             background_type: bgType,
             background_value: bgValue,
             created_by: state.user?.email || MASTER_ADMIN,
@@ -1448,6 +1485,7 @@ async function handleBoardFormSubmit(e) {
               description: desc,
               icon: icon,
               vote_mode: voteMode,
+              single_post_mode: singlePostMode,
               background_type: bgType,
               background_value: bgValue,
               created_by: state.user?.email || MASTER_ADMIN,
@@ -1473,8 +1511,10 @@ async function handleBoardFormSubmit(e) {
         if (createdBoard) {
           createdBoard.is_closed = isClosed;
           createdBoard.single_post_mode = singlePostMode;
+          createdBoard.has_event_date = hasEventDate;
           localStorage.setItem("az_board_closed_" + createdBoard.id, isClosed ? "true" : "false");
           localStorage.setItem("az_board_single_post_" + createdBoard.id, singlePostMode ? "true" : "false");
+          localStorage.setItem("az_board_has_event_date_" + createdBoard.id, hasEventDate ? "true" : "false");
           showToast("Mural criado com sucesso!", "success");
           openBoard(createdBoard);
           setTimeout(() => {
@@ -1483,8 +1523,9 @@ async function handleBoardFormSubmit(e) {
         }
       }
 
-    closeModal("modal-board");
-    await loadBoards(true);
+      closeModal("modal-board");
+      renderBoardsGrid();
+      await loadBoards(true);
   } catch (err) {
     showToast("Erro ao salvar mural: " + err.message, "error");
   } finally {
@@ -1518,8 +1559,20 @@ async function confirmDeleteBoard(boardId) {
 function openLayoutSortModal() {
   if (!state.activeBoard) return;
   const layout = state.currentLayout || 'masonry';
-  const sort = state.currentSort || 'recent';
+  let sort = state.currentSort || 'recent';
   const keepPinned = state.keepPinnedTop !== false;
+
+  // Mostra opção de ordenar por data do evento apenas se o mural tiver has_event_date ativado
+  const hasEventDate = !!state.activeBoard.has_event_date;
+  const eventDateContainer = document.getElementById("sort-opt-event-date-container");
+  if (eventDateContainer) {
+    eventDateContainer.classList.toggle("hidden", !hasEventDate);
+  }
+
+  // Se o mural não tem campo de data ativado mas a ordenação anterior era por data, recua para recente
+  if (!hasEventDate && (sort === "event-date-asc" || sort === "event-date-desc")) {
+    sort = "recent";
+  }
 
   const layoutRadio = document.querySelector(`input[name="opt_board_layout"][value="${layout}"]`);
   if (layoutRadio) layoutRadio.checked = true;
@@ -1574,7 +1627,9 @@ async function saveBoardLayoutAndSort() {
     comments: "Mais comentados",
     "alpha-asc": "Alfabética (A-Z)",
     "alpha-desc": "Alfabética (Z-A)",
-    random: "Aleatória / Randômica"
+    random: "Aleatória / Randômica",
+    "event-date-asc": "Data do Evento (Antigos 1º)",
+    "event-date-desc": "Data do Evento (Recentes 1º)"
   };
   showToast(`Mural organizado: ${layoutLabels[selectedLayout]} • ${sortLabels[selectedSort]}!`, "success");
 }
@@ -1609,8 +1664,11 @@ async function loadCards(boardId, isSilent = false) {
       });
       const userVoted = state.user && c.votes ? c.votes.some(v => (v.voter_email || v.user_email) === state.user.email) : false;
       const cardComments = (c.comments || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      const localEventDate = localStorage.getItem("az_card_event_date_" + c.id);
+      const eventDate = (c.event_date !== undefined && c.event_date !== null) ? c.event_date : (localEventDate || null);
       return {
         ...c,
+        event_date: eventDate,
         vote_count: c.votes ? c.votes.length : 0,
         comment_count: cardComments.length,
         comments_preview: cardComments.slice(0, 3),
@@ -1711,6 +1769,26 @@ function renderCardsList() {
   const sort = state.currentSort || "recent";
   const sortFn = (a, b) => {
     switch (sort) {
+      case "event-date-asc": {
+        const getCardTimestamp = (c) => {
+          if (c.event_date) {
+            const d = new Date(c.event_date.length === 10 ? c.event_date + 'T00:00:00' : c.event_date);
+            if (!isNaN(d.getTime())) return d.getTime();
+          }
+          return new Date(c.created_at).getTime();
+        };
+        return getCardTimestamp(a) - getCardTimestamp(b);
+      }
+      case "event-date-desc": {
+        const getCardTimestamp = (c) => {
+          if (c.event_date) {
+            const d = new Date(c.event_date.length === 10 ? c.event_date + 'T00:00:00' : c.event_date);
+            if (!isNaN(d.getTime())) return d.getTime();
+          }
+          return new Date(c.created_at).getTime();
+        };
+        return getCardTimestamp(b) - getCardTimestamp(a);
+      }
       case "oldest":
         return new Date(a.created_at) - new Date(b.created_at);
       case "votes":
@@ -1847,6 +1925,11 @@ function renderCardsList() {
         <div class="flex items-center gap-2 min-w-0 flex-wrap">
           ${(card.pinned || card.is_pinned) ? '<i data-lucide="pin" class="w-3.5 h-3.5 text-[#D75B36] flex-shrink-0 fill-[#D75B36]" title="Fixado no Topo"></i>' : ''}
           <h4 class="font-title text-xs sm:text-sm text-[#0A2334] leading-snug font-semibold line-clamp-2">${escapeHtml(card.title)}</h4>
+          ${card.event_date ? `
+            <span class="px-2 py-0.5 rounded-full text-[9px] font-subtitle-semibold bg-[#173057]/10 text-[#173057] border border-[#173057]/20 flex items-center gap-1 shadow-2xs flex-shrink-0" title="Data do Evento">
+              <i data-lucide="calendar" class="w-2.5 h-2.5 text-[#D75B36]"></i> ${formatEventDate(card.event_date)}
+            </span>
+          ` : ''}
           ${card.has_voted ? `
             <span class="px-2 py-0.5 rounded-full text-[9px] font-subtitle-semibold bg-emerald-600 text-white font-bold flex items-center gap-1 shadow-xs flex-shrink-0" title="Você votou neste card na enquete">
               <i data-lucide="check" class="w-3 h-3 stroke-[2.5]"></i> Seu Voto
@@ -1907,10 +1990,20 @@ function renderCardsList() {
     if (layout === "timeline") {
       const wrapper = document.createElement("div");
       wrapper.className = "timeline-item animate-fade-in";
+      
+      const isDateSort = sort === "event-date-asc" || sort === "event-date-desc";
+      const displayDate = card.event_date 
+        ? formatEventDate(card.event_date) 
+        : (isDateSort ? "Sem data" : formatDate(card.created_at));
+
+      const badgeTitle = card.event_date 
+        ? `Data do Evento: ${formatEventDate(card.event_date)}` 
+        : `Postado em: ${formatDate(card.created_at)}`;
+
       wrapper.innerHTML = `
-        <div class="timeline-date-badge">
+        <div class="timeline-date-badge" title="${badgeTitle}">
           <i data-lucide="calendar" class="w-3 h-3 text-cyan-300"></i>
-          <span>${formatDate(card.created_at)}</span>
+          <span>${displayDate}</span>
         </div>
         <div class="timeline-node">
           <i data-lucide="sparkles" class="w-2.5 h-2.5 text-white"></i>
@@ -1987,6 +2080,13 @@ function openNewCardModal() {
   const pinToggle = document.getElementById("card-pinned-toggle");
   if (pinToggle) pinToggle.checked = false;
 
+  // Data do Evento / Foto (se ativada no mural)
+  const hasEventDate = !!(state.activeBoard && state.activeBoard.has_event_date);
+  const eventDateContainer = document.getElementById("card-event-date-container");
+  if (eventDateContainer) eventDateContainer.classList.toggle("hidden", !hasEventDate);
+  const eventDateInput = document.getElementById("card-event-date-input");
+  if (eventDateInput) eventDateInput.value = "";
+
   document.getElementById("card-upload-box").classList.add("hidden");
   document.getElementById("card-youtube-box").classList.add("hidden");
   document.getElementById("card-media-preview-container").classList.add("hidden");
@@ -2005,6 +2105,13 @@ function openEditCardModal(cardId) {
   document.getElementById("card-id-hidden").value = card.id;
   document.getElementById("card-title-input").value = card.title || "";
   document.getElementById("card-content-input").value = card.content || "";
+
+  // Data do Evento / Foto (se ativada no mural ou se o card já possuir data)
+  const hasEventDate = !!(state.activeBoard && state.activeBoard.has_event_date) || !!card.event_date;
+  const eventDateContainer = document.getElementById("card-event-date-container");
+  if (eventDateContainer) eventDateContainer.classList.toggle("hidden", !hasEventDate);
+  const eventDateInput = document.getElementById("card-event-date-input");
+  if (eventDateInput) eventDateInput.value = card.event_date || "";
 
   // Apenas Administradores podem fixar no topo
   const isAdmin = isUserAdmin();
@@ -2042,6 +2149,7 @@ async function handleCardFormSubmit(e) {
   const title = document.getElementById("card-title-input").value.trim();
   const content = document.getElementById("card-content-input").value.trim();
   const color = document.getElementById("card-color-hidden").value || "white";
+  const eventDate = document.getElementById("card-event-date-input")?.value || null;
 
   // Apenas administradores podem definir/alterar o estado de fixado no topo
   const isAdmin = isUserAdmin();
@@ -2087,12 +2195,22 @@ async function handleCardFormSubmit(e) {
         media_type: mediaType
       };
       if (mediaUrl) updatePayload.media_url = mediaUrl;
+      if (state.activeBoard?.has_event_date || eventDate) {
+        updatePayload.event_date = eventDate || null;
+      }
       // Atualiza o avatar apenas se for o próprio autor editando seu próprio card
       if (isOriginalAuthor && state.user?.avatarUrl) {
         updatePayload.author_avatar = state.user.avatarUrl;
       }
 
+      localStorage.setItem("az_card_event_date_" + id, eventDate || "");
+
       let { error } = await supabaseClient.from("cards").update(updatePayload).eq("id", id);
+      if (error && (error.message?.includes("event_date") || error.code === "PGRST204")) {
+        delete updatePayload.event_date;
+        const retry = await supabaseClient.from("cards").update(updatePayload).eq("id", id);
+        error = retry.error;
+      }
       if (error && (error.message?.includes("author_avatar") || error.code === "PGRST204")) {
         delete updatePayload.author_avatar;
         const retry = await supabaseClient.from("cards").update(updatePayload).eq("id", id);
@@ -2116,18 +2234,29 @@ async function handleCardFormSubmit(e) {
         pinned: isPinned,
         media_type: mediaType,
         media_url: mediaUrl,
+        event_date: eventDate || null,
         author_name: state.user?.name || "Colaborador",
         author_email: state.user?.email || MASTER_ADMIN,
         author_avatar: state.user?.avatarUrl || ""
       };
 
-      let { error } = await supabaseClient.from("cards").insert([insertPayload]);
+      let { data: insertedCards, error } = await supabaseClient.from("cards").insert([insertPayload]).select();
+      if (error && (error.message?.includes("event_date") || error.code === "PGRST204")) {
+        delete insertPayload.event_date;
+        const retry = await supabaseClient.from("cards").insert([insertPayload]).select();
+        error = retry.error;
+        insertedCards = retry.data;
+      }
       if (error && (error.message?.includes("author_avatar") || error.code === "PGRST204")) {
         delete insertPayload.author_avatar;
-        const retry = await supabaseClient.from("cards").insert([insertPayload]);
+        const retry = await supabaseClient.from("cards").insert([insertPayload]).select();
         error = retry.error;
+        insertedCards = retry.data;
       }
       if (error) throw error;
+      if (insertedCards && insertedCards[0] && eventDate) {
+        localStorage.setItem("az_card_event_date_" + insertedCards[0].id, eventDate);
+      }
       showToast("Card criado no mural!", "success");
     }
 
@@ -2845,6 +2974,27 @@ function setupEventListeners() {
     }
   });
 
+  // Alternância instantânea ao mudar o campo de data do evento no modal
+  document.getElementById("board-event-date-toggle")?.addEventListener("change", async (e) => {
+    const isChecked = e.target.checked;
+    const boardId = document.getElementById("board-id-hidden")?.value || state.activeBoard?.id;
+
+    if (state.activeBoard && (!boardId || state.activeBoard.id === boardId)) {
+      state.activeBoard.has_event_date = isChecked;
+      renderCardsList();
+    }
+    if (boardId) {
+      const bObj = (state.boards || []).find(b => b.id === boardId);
+      if (bObj) bObj.has_event_date = isChecked;
+      localStorage.setItem("az_board_has_event_date_" + boardId, isChecked ? "true" : "false");
+      try {
+        await supabaseClient.from("boards").update({ has_event_date: isChecked }).eq("id", boardId);
+      } catch (err) {
+        console.warn("Auto-sync has_event_date failed:", err);
+      }
+    }
+  });
+
   // Criação de Card & Votação Flutuante
   document.getElementById("btn-add-card-header")?.addEventListener("click", openNewCardModal);
   document.getElementById("btn-add-card-empty")?.addEventListener("click", openNewCardModal);
@@ -3295,6 +3445,24 @@ function formatDate(iso) {
     return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
   } catch (e) {
     return "";
+  }
+}
+
+function formatEventDate(val) {
+  if (!val) return "";
+  if (typeof val === "string" && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+    const parts = val.split("-");
+    const d = parts[2];
+    const m = parts[1];
+    const y = parts[0];
+    return `${d}/${m}/${y}`;
+  }
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return String(val);
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  } catch (e) {
+    return String(val);
   }
 }
 
