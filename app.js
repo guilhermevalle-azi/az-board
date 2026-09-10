@@ -285,19 +285,6 @@ async function signOut() {
   handleUnauthenticatedUser();
 }
 
-// Modo Demonstração / Dev para testes imediatos sem Google OAuth
-function devTestLogin() {
-  handleAuthenticatedUser({
-    id: "dev-master-id",
-    email: MASTER_ADMIN,
-    user_metadata: {
-      full_name: "Guilherme Valle (Dev)",
-      avatar_url: null
-    }
-  });
-  showToast("Modo Demonstração ativado com Guilherme Valle", "success");
-}
-
 // ============================================================================
 // RENDERIZAÇÃO DO USUÁRIO NO HEADER
 // ============================================================================
@@ -1689,7 +1676,6 @@ async function exportBoardToPNG() {
 function setupEventListeners() {
   // Autenticação
   document.getElementById("btn-login-google")?.addEventListener("click", signInWithGoogle);
-  document.getElementById("btn-login-dev")?.addEventListener("click", devTestLogin);
   document.getElementById("btn-logout")?.addEventListener("click", signOut);
   document.getElementById("btn-logout-drawer")?.addEventListener("click", signOut);
 
