@@ -49,17 +49,28 @@ const state = {
   editingBoardId: null,
   pendingMediaFile: null,
   viewMode: 'admin',
-  isAdminDrawerOpen: false
+  isAdminDrawerOpen: false,
+  currentLayout: 'masonry',
+  currentSort: 'recent',
+  keepPinnedTop: true
 };
 
 // ============================================================================
-// PALETAS DE CORES & GRADIENTES (AZ & VARIADAS)
+// PALETAS DE CORES & GRADIENTES (AZ, BÁSICAS, CLARAS & MODERNAS)
 // ============================================================================
 const AZ_GRADIENTS = [
   // Opções Oficiais AZ (Equilibradas, elegantes e confortáveis aos olhos)
   { name: "AZ Corporate", value: "linear-gradient(135deg, #0A2334 0%, #173057 65%, #7a321f 100%)" },
   { name: "AZ Pôr do Sol Suave", value: "linear-gradient(135deg, #0c1e2b 0%, #173057 55%, #4f2d24 100%)" },
   { name: "AZ Noite & Cobre", value: "linear-gradient(135deg, #071520 0%, #11263d 70%, #3d2019 100%)" },
+
+  // Alternativas Mais Claras (Leves e Agradáveis)
+  { name: "Luz da Manhã (Branco/Gelo)", value: "linear-gradient(135deg, #FFFFFF 0%, #F1F5F9 50%, #E2E8F0 100%)" },
+  { name: "Céu Claro (Azul Pastel)", value: "linear-gradient(135deg, #E0F2FE 0%, #BAE6FD 50%, #7DD3FC 100%)" },
+  { name: "Pôr do Sol Pastel (Amarelo Claro)", value: "linear-gradient(135deg, #FEF3C7 0%, #FDE68A 50%, #FED7AA 100%)" },
+  { name: "Menta Serena (Verde Claro)", value: "linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 50%, #A7F3D0 100%)" },
+  { name: "Lavanda Suave (Lilás Claro)", value: "linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 50%, #DDD6FE 100%)" },
+  { name: "Areia Dourada (Bege Suave)", value: "linear-gradient(135deg, #FAF5EF 0%, #F5EBE1 50%, #EAD8C7 100%)" },
 
   // Opções Variadas Modernas
   { name: "Ocean Deep", value: "linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)" },
@@ -75,21 +86,30 @@ const AZ_GRADIENTS = [
 ];
 
 const AZ_SOLID_COLORS = [
-  // 2 Opções Oficiais AZ
+  // Opções Oficiais AZ
   { name: "Azul Escuro AZ", value: "#0A2334" },
   { name: "Laranja AZ", value: "#D75B36" },
 
-  // Opções Variadas Modernas
+  // Cores Básicas e Claras
+  { name: "Branco Neve", value: "#FFFFFF" },
+  { name: "Branco Gelo (Off-White)", value: "#F8FAFC" },
+  { name: "Cinza Claro Platina", value: "#E2E8F0" },
+  { name: "Amarelo Claro Solar", value: "#FEF08A" },
+  { name: "Amarelo Canário", value: "#FACC15" },
+  { name: "Vermelho Carmim", value: "#DC2626" },
+  { name: "Vermelho Suave (Coral)", value: "#EF4444" },
+  { name: "Azul Céu Claro", value: "#BAE6FD" },
+  { name: "Verde Menta Claro", value: "#BBF7D0" },
+  { name: "Rosa Pastel", value: "#FBCFE8" },
+  { name: "Bege Areia Natural", value: "#F5EBE0" },
+
+  // Tons Escuros e Corporativos
   { name: "Grafite Escuro", value: "#1e293b" },
   { name: "Índigo Profundo", value: "#1e1b4b" },
   { name: "Esmeralda Escuro", value: "#064e3b" },
   { name: "Teal Oceano", value: "#134e4a" },
-  { name: "Vinho Elegante", value: "#4c0519" },
-  { name: "Roxo Noite", value: "#3b0764" },
   { name: "Azul Petróleo", value: "#0c4a6e" },
-  { name: "Cinza Carvão", value: "#18181b" },
-  { name: "Cobre Intenso", value: "#7c2d12" },
-  { name: "Azul Cobalto", value: "#1e3a8a" }
+  { name: "Cobre Intenso", value: "#7c2d12" }
 ];
 
 const POPULAR_EMOJIS = [
@@ -186,17 +206,14 @@ async function handleAuthenticatedUser(supabaseUser) {
 
   const isRealAdmin = !!(state.user?.isAdmin || state.user?.isMasterAdmin);
 
-  // Botões de criar mural: exclusivos para Administradores
-  const btnCreateHero = document.getElementById("btn-create-board-hero");
-  if (btnCreateHero) btnCreateHero.classList.toggle("hidden", !isRealAdmin);
-  const btnCreateEmpty = document.getElementById("btn-create-board-empty");
-  if (btnCreateEmpty) btnCreateEmpty.classList.toggle("hidden", !isRealAdmin);
-
   // Iniciar Realtime e Murais
   setupRealtimeWebsockets();
   await loadBoards();
 
-  // Redireciona diretamente para o interior do mural (usuário comum NUNCA acessa o painel de murais)
+  // Configura a barra de ferramentas do Admin
+  updateAdminDrawerContext();
+
+  // Verifica se há acesso direto a um mural compartilhado via ?board=
   await checkDirectBoardAccess();
 }
 
@@ -209,17 +226,9 @@ async function checkDirectBoardAccess() {
   }
   localStorage.removeItem("az_board_pending_id");
 
-  const isRealAdmin = !!(state.user?.isAdmin || state.user?.isMasterAdmin);
-
-  // Se for usuário comum e não tiver mural especificado na URL, abre automaticamente o primeiro mural disponível
-  if (!targetBoardId && !isRealAdmin && state.boards.length > 0) {
-    targetBoardId = state.boards[0].id;
-  }
-
+  // Se não houver mural específico solicitado por link, mantém o usuário no dashboard (que já filtra murais abertos)
   if (!targetBoardId) {
-    if (!isRealAdmin) {
-      document.getElementById("view-dashboard")?.classList.add("hidden");
-    }
+    updateAdminDrawerContext();
     return;
   }
 
@@ -234,8 +243,13 @@ async function checkDirectBoardAccess() {
         .eq("id", targetBoardId)
         .single();
       if (!error && data) {
+        const localClosed = localStorage.getItem("az_board_closed_" + data.id);
+        const isClosed = (data.is_closed !== undefined && data.is_closed !== null)
+          ? !!data.is_closed
+          : (localClosed === "true");
         target = {
           ...data,
+          is_closed: isClosed,
           card_count: data.cards ? data.cards.length : 0
         };
         state.boards.push(target);
@@ -248,10 +262,9 @@ async function checkDirectBoardAccess() {
   if (target) {
     state.isDirectBoardAccess = true;
     openBoard(target);
-  } else if (!isRealAdmin && state.boards.length > 0) {
-    openBoard(state.boards[0]);
   } else {
     showToast("Mural compartilhado não encontrado.", "error");
+    updateAdminDrawerContext();
   }
 }
 
@@ -259,6 +272,8 @@ function handleUnauthenticatedUser() {
   state.user = null;
   document.getElementById("app-shell").classList.add("hidden");
   document.getElementById("view-login").classList.remove("hidden");
+  document.getElementById("admin-collapsible-wrapper")?.classList.add("hidden");
+  toggleAdminDrawer(false);
 }
 
 function showLoginError(title, message) {
@@ -494,10 +509,17 @@ async function loadBoards(isSilent = false) {
     if (!isSilent) showLoader(false);
     if (error) throw error;
 
-    state.boards = (boards || []).map(b => ({
-      ...b,
-      card_count: b.cards ? b.cards.length : 0
-    }));
+    state.boards = (boards || []).map(b => {
+      const localClosed = localStorage.getItem("az_board_closed_" + b.id);
+      const isClosed = (b.is_closed !== undefined && b.is_closed !== null)
+        ? !!b.is_closed
+        : (localClosed === "true");
+      return {
+        ...b,
+        is_closed: isClosed,
+        card_count: b.cards ? b.cards.length : 0
+      };
+    });
 
     renderBoardsGrid();
   } catch (err) {
@@ -510,19 +532,44 @@ async function loadBoards(isSilent = false) {
 function renderBoardsGrid() {
   const grid = document.getElementById("boards-grid");
   const empty = document.getElementById("empty-boards-msg");
+  const emptyTitle = document.getElementById("empty-boards-title");
+  const emptyDesc = document.getElementById("empty-boards-desc");
+  const btnCreateHero = document.getElementById("btn-create-board-hero");
+  const btnCreateEmpty = document.getElementById("btn-create-board-empty");
   if (!grid) return;
 
   grid.innerHTML = "";
 
-  if (!state.boards || state.boards.length === 0) {
+  const effectiveAdmin = isUserAdmin();
+
+  // Botões de criar mural: visíveis apenas no modo Admin
+  if (btnCreateHero) btnCreateHero.classList.toggle("hidden", !effectiveAdmin);
+  if (btnCreateEmpty) btnCreateEmpty.classList.toggle("hidden", !effectiveAdmin);
+
+  // Filtragem: Usuário comum vê APENAS murais abertos (!board.is_closed)
+  const visibleBoards = (state.boards || []).filter(board => {
+    if (effectiveAdmin) return true; // Admin vê todos
+    return !board.is_closed; // Colaborador vê apenas abertos
+  });
+
+  if (visibleBoards.length === 0) {
     if (empty) empty.classList.remove("hidden");
+    if (emptyTitle) {
+      emptyTitle.textContent = effectiveAdmin ? "Nenhum mural disponível" : "Nenhum mural aberto no momento";
+    }
+    if (emptyDesc) {
+      emptyDesc.textContent = effectiveAdmin
+        ? "Crie o primeiro mural colaborativo para a equipe começar a postar fotos, vídeos e ideias."
+        : "Nenhum mural aberto para participação no momento. Assim que a equipe disponibilizar um novo mural aberto, ele aparecerá aqui para você participar e postar suas ideias!";
+    }
     return;
   }
+
   if (empty) empty.classList.add("hidden");
 
-  state.boards.forEach(board => {
+  visibleBoards.forEach(board => {
     const cardEl = document.createElement("div");
-    cardEl.className = "glass-card rounded-2xl overflow-hidden border border-gray-100 flex flex-col cursor-pointer group";
+    cardEl.className = "glass-card rounded-2xl overflow-hidden border border-gray-100 flex flex-col cursor-pointer group hover:shadow-lg transition-all relative";
     
     // Background header
     let bgStyle = "background: linear-gradient(135deg, #0A2334 0%, #173057 100%);";
@@ -532,29 +579,37 @@ function renderBoardsGrid() {
       bgStyle = `background: url('${board.background_value}') center/cover no-repeat;`;
     }
 
-    const isAdmin = state.user && (state.user.isAdmin || state.user.isMasterAdmin);
-    const isOwnerOrAdmin = state.user && (board.created_by === state.user.email || isAdmin);
+    const isOwnerOrAdmin = state.user && (board.created_by === state.user.email || effectiveAdmin);
+    const isClosed = !!board.is_closed;
 
     cardEl.innerHTML = `
       <div class="h-24 p-3 relative flex items-start justify-between" style="${bgStyle}">
         <div class="w-10 h-10 rounded-xl bg-white/90 backdrop-blur-sm shadow-md flex items-center justify-center text-xl">
           ${board.icon || '📌'}
         </div>
-        <div class="flex items-center gap-1">
-          ${board.vote_mode && isAdmin ? '<span class="text-[9px] uppercase font-subtitle-semibold bg-[#D75B36] text-white px-2 py-0.5 rounded-full font-bold shadow-sm">Votação</span>' : ''}
-          ${isOwnerOrAdmin ? `
+        <div class="flex items-center gap-1.5">
+          ${board.vote_mode && effectiveAdmin ? '<span class="text-[9px] uppercase font-subtitle-semibold bg-[#D75B36] text-white px-2 py-0.5 rounded-full font-bold shadow-sm">Votação</span>' : ''}
+          ${effectiveAdmin ? `
+            <span class="text-[9px] uppercase font-subtitle-semibold ${isClosed ? 'bg-gray-900/90 text-amber-300 border border-amber-500/30' : 'bg-emerald-600/90 text-white'} px-2 py-0.5 rounded-full font-bold shadow-sm flex items-center gap-1">
+              ${isClosed ? '<i data-lucide="lock" class="w-2.5 h-2.5"></i> Fechado' : '<span class="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span> Aberto'}
+            </span>
+          ` : ''}
+          ${effectiveAdmin ? `
             <div class="relative group/menu">
               <button type="button" class="btn-board-menu p-1 text-white/80 hover:text-white rounded-lg bg-black/20 hover:bg-black/40">
                 <i data-lucide="more-vertical" class="w-3.5 h-3.5"></i>
               </button>
-              <div class="hidden group-hover/menu:block absolute right-0 top-6 w-36 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-20">
-                <button type="button" class="btn-share-board w-full text-left px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center gap-1.5" data-id="${board.id}">
+              <div class="hidden group-hover/menu:block absolute right-0 top-6 w-40 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-20">
+                <button type="button" class="btn-share-board w-full text-left px-3 py-1.5 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center gap-1.5 cursor-pointer" data-id="${board.id}">
                   <i data-lucide="share-2" class="w-3 h-3 text-emerald-600"></i> Compartilhar
                 </button>
-                <button type="button" class="btn-edit-board w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5" data-id="${board.id}">
+                <button type="button" class="btn-toggle-status-board w-full text-left px-3 py-1.5 text-xs ${isClosed ? 'text-emerald-700 hover:bg-emerald-50' : 'text-amber-700 hover:bg-amber-50'} flex items-center gap-1.5 cursor-pointer" data-id="${board.id}">
+                  <i data-lucide="${isClosed ? 'unlock' : 'lock'}" class="w-3 h-3"></i> ${isClosed ? 'Reabrir Mural' : 'Encerrar Mural'}
+                </button>
+                <button type="button" class="btn-edit-board w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-1.5 cursor-pointer" data-id="${board.id}">
                   <i data-lucide="edit-3" class="w-3 h-3 text-[#173057]"></i> Editar
                 </button>
-                <button type="button" class="btn-delete-board w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-1.5" data-id="${board.id}">
+                <button type="button" class="btn-delete-board w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-1.5 cursor-pointer" data-id="${board.id}">
                   <i data-lucide="trash-2" class="w-3 h-3"></i> Excluir
                 </button>
               </div>
@@ -583,7 +638,7 @@ function renderBoardsGrid() {
 
     // Clique no card abre o mural
     cardEl.addEventListener("click", (e) => {
-      if (e.target.closest(".group\\/menu") || e.target.closest(".btn-share-board")) return;
+      if (e.target.closest(".group\\/menu") || e.target.closest(".btn-share-board") || e.target.closest(".btn-toggle-status-board")) return;
       openBoard(board);
     });
 
@@ -592,11 +647,18 @@ function renderBoardsGrid() {
 
   if (window.lucide) lucide.createIcons();
 
-  // Ações de Compartilhar / Editar / Excluir Mural
+  // Ações de Compartilhar / Alterar Status / Editar / Excluir Mural
   grid.querySelectorAll(".btn-share-board").forEach(btn => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       openShareModal(btn.dataset.id);
+    });
+  });
+
+  grid.querySelectorAll(".btn-toggle-status-board").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleBoardOpenClose(btn.dataset.id);
     });
   });
 
@@ -613,6 +675,90 @@ function renderBoardsGrid() {
       confirmDeleteBoard(btn.dataset.id);
     });
   });
+}
+
+// ============================================================================
+// CONTROLE DE STATUS DO MURAL (ABERTO VS ENCERRADO)
+// ============================================================================
+async function toggleBoardOpenClose(boardId) {
+  let board = (state.boards || []).find(b => b.id === boardId);
+  if (!board && state.activeBoard && state.activeBoard.id === boardId) {
+    board = state.activeBoard;
+  }
+  if (!board) return;
+
+  const newClosedState = !board.is_closed;
+  board.is_closed = newClosedState;
+  if (state.activeBoard && state.activeBoard.id === boardId) {
+    state.activeBoard.is_closed = newClosedState;
+  }
+
+  // Persistência local imediata
+  localStorage.setItem("az_board_closed_" + boardId, newClosedState ? "true" : "false");
+
+  // Persistência no Supabase (se coluna existir)
+  if (supabaseClient) {
+    try {
+      const { error } = await supabaseClient
+        .from("boards")
+        .update({ is_closed: newClosedState })
+        .eq("id", boardId);
+      if (error) {
+        console.warn("Aviso ao persistir status is_closed no Supabase:", error);
+      }
+    } catch (e) {
+      console.warn("Aviso ao atualizar is_closed:", e);
+    }
+  }
+
+  showToast(
+    newClosedState
+      ? "Mural encerrado! Novas postagens de colaboradores foram bloqueadas."
+      : "Mural reaberto! Colaboradores agora podem postar ideias novamente.",
+    "info"
+  );
+
+  // Atualiza UI de acordo com o contexto atual
+  if (!state.activeBoard) {
+    renderBoardsGrid();
+  } else {
+    updateBoardViewStatusUI();
+  }
+}
+
+function updateBoardViewStatusUI() {
+  if (!state.activeBoard) return;
+  const isClosed = !!state.activeBoard.is_closed;
+  const effectiveAdmin = isUserAdmin();
+
+  // Banner informativo de Mural Encerrado
+  const closedBanner = document.getElementById("board-closed-banner");
+  if (closedBanner) {
+    closedBanner.classList.toggle("hidden", !isClosed);
+  }
+  const btnReopenBanner = document.getElementById("btn-reopen-board-banner");
+  if (btnReopenBanner) {
+    btnReopenBanner.classList.toggle("hidden", !isClosed || !effectiveAdmin);
+  }
+
+  // Badge "Encerrado" ao lado do título do mural
+  const closedBadge = document.getElementById("board-view-closed-badge");
+  if (closedBadge) {
+    closedBadge.classList.toggle("hidden", !isClosed);
+  }
+
+  // Botões de Adicionar Card: se o mural estiver encerrado, apenas Admins podem adicionar
+  const fabAddCard = document.getElementById("btn-fab-add-card");
+  const btnAddCardEmpty = document.getElementById("btn-add-card-empty");
+  const btnAddCardHeader = document.getElementById("btn-add-card-header");
+
+  const canAddCard = !isClosed || effectiveAdmin;
+  if (fabAddCard) fabAddCard.classList.toggle("hidden", !canAddCard);
+  if (btnAddCardEmpty) btnAddCardEmpty.classList.toggle("hidden", !canAddCard);
+  if (btnAddCardHeader) btnAddCardHeader.classList.toggle("hidden", !canAddCard);
+
+  // Atualiza botão de alternar status na gaveta retrátil
+  updateAdminDrawerContext();
 }
 
 // ============================================================================
@@ -644,6 +790,74 @@ function toggleAdminDrawer(forceOpen) {
   }
 }
 
+function updateAdminDrawerContext() {
+  const isRealAdmin = !!(state.user?.isAdmin || state.user?.isMasterAdmin);
+  const wrapper = document.getElementById("admin-collapsible-wrapper");
+  if (!wrapper) return;
+
+  if (!isRealAdmin) {
+    wrapper.classList.add("hidden");
+    return;
+  }
+
+  // Admin sempre tem a aba flutuante disponível (tanto no dashboard quanto dentro do mural)
+  wrapper.classList.remove("hidden");
+
+  const isInsideBoard = !!state.activeBoard;
+
+  const btnBack = document.getElementById("btn-back-to-dashboard");
+  const btnCreateDrawer = document.getElementById("btn-create-board-drawer");
+  const btnToggleStatus = document.getElementById("btn-toggle-board-status-drawer");
+  const btnVote = document.getElementById("btn-vote-board");
+  const btnStats = document.getElementById("btn-stats-board");
+  const btnLayoutSort = document.getElementById("btn-board-layout-sort");
+  const btnSettings = document.getElementById("btn-board-settings");
+  const btnShare = document.getElementById("btn-share-board-header");
+  const btnExport = document.getElementById("btn-export-png");
+
+  if (!isInsideBoard) {
+    // Na tela inicial (Dashboard de Murais)
+    if (btnBack) btnBack.classList.add("hidden");
+    if (btnCreateDrawer) btnCreateDrawer.classList.remove("hidden");
+    if (btnToggleStatus) btnToggleStatus.classList.add("hidden");
+    if (btnVote) btnVote.classList.add("hidden");
+    if (btnStats) btnStats.classList.add("hidden");
+    if (btnLayoutSort) btnLayoutSort.classList.add("hidden");
+    if (btnSettings) btnSettings.classList.add("hidden");
+    if (btnShare) btnShare.classList.add("hidden");
+    if (btnExport) btnExport.classList.add("hidden");
+  } else {
+    // No interior de um Mural
+    if (btnBack) btnBack.classList.remove("hidden");
+    if (btnCreateDrawer) btnCreateDrawer.classList.add("hidden");
+    if (btnToggleStatus) {
+      btnToggleStatus.classList.remove("hidden");
+      const isClosed = !!state.activeBoard.is_closed;
+      const label = document.getElementById("btn-toggle-board-status-label");
+      const icon = document.getElementById("btn-toggle-board-status-icon");
+      if (label) label.textContent = isClosed ? "Reabrir Mural" : "Encerrar Mural";
+      if (icon) {
+        icon.setAttribute("data-lucide", isClosed ? "unlock" : "lock");
+        icon.className = isClosed ? "w-3.5 h-3.5 text-emerald-400" : "w-3.5 h-3.5 text-amber-400";
+      }
+      btnToggleStatus.className = isClosed
+        ? "px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-500/30 text-xs font-subtitle-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+        : "px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 text-xs font-subtitle-semibold flex items-center gap-1.5 transition-all cursor-pointer";
+    }
+
+    const effectiveAdmin = isUserAdmin();
+    if (btnVote) btnVote.classList.toggle("hidden", !state.activeBoard.vote_mode || !effectiveAdmin);
+    if (btnStats) btnStats.classList.toggle("hidden", !state.activeBoard.vote_mode || !effectiveAdmin);
+    const isOwnerOrAdmin = state.user && (state.activeBoard.created_by === state.user.email || effectiveAdmin);
+    if (btnSettings) btnSettings.classList.toggle("hidden", !isOwnerOrAdmin);
+    if (btnLayoutSort) btnLayoutSort.classList.toggle("hidden", !isOwnerOrAdmin);
+    if (btnShare) btnShare.classList.remove("hidden");
+    if (btnExport) btnExport.classList.remove("hidden");
+  }
+
+  if (window.lucide) lucide.createIcons();
+}
+
 function setViewMode(mode) {
   state.viewMode = mode;
   updateViewModeUI();
@@ -652,27 +866,14 @@ function setViewMode(mode) {
     showToast("Modo Admin ativado: ferramentas completas visíveis.", "info");
   } else {
     showToast("Visão do Usuário ativada: você está visualizando como um colaborador comum.", "info");
-    // Fecha a gaveta para dar a visão limpa real do mural ao usuário
     toggleAdminDrawer(false);
   }
 
-  // Atualiza controles na tela do mural ativo
-  if (state.activeBoard) {
-    const effectiveAdmin = isUserAdmin();
-    const voteBadge = document.getElementById("board-view-vote-badge");
-    const btnVote = document.getElementById("btn-vote-board");
-    const btnStats = document.getElementById("btn-stats-board");
-    const btnSettings = document.getElementById("btn-board-settings");
-
-    updateFabVoteButton();
-    if (voteBadge) voteBadge.classList.toggle("hidden", !state.activeBoard.vote_mode);
-
-    if (btnVote) btnVote.classList.toggle("hidden", !state.activeBoard.vote_mode || !effectiveAdmin);
-    if (btnStats) btnStats.classList.toggle("hidden", !state.activeBoard.vote_mode || !effectiveAdmin);
-
-    const isOwnerOrAdmin = state.user && (state.activeBoard.created_by === state.user.email || effectiveAdmin);
-    if (btnSettings) btnSettings.classList.toggle("hidden", !isOwnerOrAdmin);
-
+  // Atualiza a tela de acordo com o contexto
+  if (!state.activeBoard) {
+    renderBoardsGrid();
+  } else {
+    updateBoardViewStatusUI();
     renderCardsList();
   }
 }
@@ -730,19 +931,6 @@ function openBoard(board) {
   const mainHeader = document.getElementById("main-app-header");
   if (mainHeader) mainHeader.classList.add("hidden");
 
-  // Controle da gaveta retrátil de Admin
-  const isRealAdmin = !!(state.user?.isAdmin || state.user?.isMasterAdmin);
-  const adminWrapper = document.getElementById("admin-collapsible-wrapper");
-  if (adminWrapper) {
-    if (isRealAdmin) {
-      adminWrapper.classList.remove("hidden");
-      toggleAdminDrawer(false);
-      updateViewModeUI();
-    } else {
-      adminWrapper.classList.add("hidden");
-    }
-  }
-
   // Atualiza query param da URL com ?board=<id> de forma transparente
   try {
     const newUrl = new URL(window.location);
@@ -750,47 +938,42 @@ function openBoard(board) {
     history.replaceState(null, "", newUrl.toString());
   } catch(e) {}
 
-  // Se o usuário não for admin, oculta botão de voltar aos murais SEMPRE
-  const btnBack = document.getElementById("btn-back-to-dashboard");
-  if (btnBack) {
-    btnBack.classList.toggle("hidden", !isRealAdmin);
-  }
+  // Botões de voltar aos murais: disponíveis para todos os usuários
   const headerLogo = document.getElementById("header-logo-home");
   if (headerLogo) {
-    if (!isRealAdmin) {
-      headerLogo.classList.remove("cursor-pointer");
-      headerLogo.onclick = (e) => { e.preventDefault(); };
-    } else {
-      headerLogo.classList.add("cursor-pointer");
-      headerLogo.onclick = showDashboardView;
-    }
+    headerLogo.classList.add("cursor-pointer");
+    headerLogo.onclick = showDashboardView;
+  }
+  const btnBack = document.getElementById("btn-back-to-dashboard");
+  if (btnBack) {
+    btnBack.onclick = showDashboardView;
+  }
+  const btnCanvasBack = document.getElementById("btn-board-canvas-back");
+  if (btnCanvasBack) {
+    btnCanvasBack.onclick = showDashboardView;
   }
 
   // Configurações visuais do mural ativo
   document.getElementById("board-view-icon").textContent = board.icon || "📌";
+  document.getElementById("board-view-title").textContent = board.title || "Sem título";
   const descEl = document.getElementById("board-view-desc");
   const descBox = document.getElementById("board-view-desc-box");
   if (descEl) descEl.textContent = board.description || "";
   if (descBox) descBox.classList.toggle("hidden", !board.description || !board.description.trim());
 
-  const voteBadge = document.getElementById("board-view-vote-badge");
-  const btnFabVote = document.getElementById("btn-fab-vote-board");
-  const btnVote = document.getElementById("btn-vote-board");
-  const btnStats = document.getElementById("btn-stats-board");
-  const btnSettings = document.getElementById("btn-board-settings");
-
-  const effectiveAdmin = isUserAdmin();
-
   // Votação: Botão flutuante aparente ao lado do novo card para todos quando ativa
+  const voteBadge = document.getElementById("board-view-vote-badge");
   updateFabVoteButton();
   if (voteBadge) voteBadge.classList.toggle("hidden", !board.vote_mode);
 
-  // Apuração e Ações na gaveta admin
-  if (btnVote) btnVote.classList.toggle("hidden", !board.vote_mode || !effectiveAdmin);
-  if (btnStats) btnStats.classList.toggle("hidden", !board.vote_mode || !effectiveAdmin);
+  // Status Aberto/Encerrado e botões de adicionar card
+  updateBoardViewStatusUI();
 
-  const isOwnerOrAdmin = state.user && (board.created_by === state.user.email || effectiveAdmin);
-  if (btnSettings) btnSettings.classList.toggle("hidden", !isOwnerOrAdmin);
+  // Configuração de Layout e Ordenação do mural
+  state.currentLayout = board.layout_mode || localStorage.getItem(`az_board_layout_${board.id}`) || 'masonry';
+  state.currentSort = board.sort_mode || localStorage.getItem(`az_board_sort_${board.id}`) || 'recent';
+  const savedPinned = localStorage.getItem(`az_board_pinned_${board.id}`);
+  state.keepPinnedTop = savedPinned !== null ? savedPinned === 'true' : true;
 
   // Aplica o fundo do mural
   applyBoardBackground(board);
@@ -800,9 +983,6 @@ function openBoard(board) {
 }
 
 function showDashboardView() {
-  const isRealAdmin = !!(state.user?.isAdmin || state.user?.isMasterAdmin);
-  if (!isRealAdmin) return;
-
   state.activeBoard = null;
   state.isDirectBoardAccess = false;
   document.getElementById("view-board").classList.add("hidden");
@@ -811,13 +991,6 @@ function showDashboardView() {
   // Restaura cabeçalho superior padrão
   const mainHeader = document.getElementById("main-app-header");
   if (mainHeader) mainHeader.classList.remove("hidden");
-
-  // Oculta a gaveta de admin
-  const adminWrapper = document.getElementById("admin-collapsible-wrapper");
-  if (adminWrapper) {
-    adminWrapper.classList.add("hidden");
-    toggleAdminDrawer(false);
-  }
 
   // Limpa o query param ?board da URL
   try {
@@ -832,7 +1005,39 @@ function showDashboardView() {
     bgEl.style.background = "linear-gradient(135deg, #0A2334 0%, #173057 100%)";
   }
 
-  loadBoards(true);
+  // Atualiza gaveta admin para o contexto de dashboard
+  updateAdminDrawerContext();
+
+  // Re-renderiza o grid de murais aplicando filtros de perfil
+  renderBoardsGrid();
+}
+
+function isLightBackground(bgType, bgValue) {
+  if (!bgValue) return false;
+  if (bgType === "color") {
+    let hex = bgValue.replace("#", "").trim();
+    if (hex.length === 3) hex = hex.split("").map(ch => ch + ch).join("");
+    if (hex.length === 6) {
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+      return luminance > 165;
+    }
+  } else if (bgType === "gradient") {
+    const lower = bgValue.toLowerCase();
+    return (
+      lower.includes("#ffffff") ||
+      lower.includes("#f8fafc") ||
+      lower.includes("#e0f2fe") ||
+      lower.includes("#fef3c7") ||
+      lower.includes("#ecfdf5") ||
+      lower.includes("#f5f3ff") ||
+      lower.includes("#faf5ef") ||
+      lower.includes("#e2e8f0")
+    );
+  }
+  return false;
 }
 
 function applyBoardBackground(board) {
@@ -846,6 +1051,13 @@ function applyBoardBackground(board) {
   } else {
     bgEl.style.background = "linear-gradient(135deg, #0A2334 0%, #173057 100%)";
   }
+
+  // Adaptação de contraste automática para murais com fundos claros (Branco, Amarelo Claro, etc.)
+  const isLight = isLightBackground(board.background_type, board.background_value);
+  const viewBoard = document.getElementById("view-board");
+  if (viewBoard) {
+    viewBoard.classList.toggle("board-light-theme", isLight);
+  }
 }
 
 function openNewBoardModal() {
@@ -857,6 +1069,9 @@ function openNewBoardModal() {
   document.getElementById("board-id-hidden").value = "";
   document.getElementById("board-icon-input").value = "📌";
   document.getElementById("board-icon-current").textContent = "📌";
+
+  const openToggle = document.getElementById("board-open-toggle");
+  if (openToggle) openToggle.checked = true;
 
   document.getElementById("bg-type-gradient").checked = true;
   handleBackgroundTypeChange("gradient");
@@ -878,6 +1093,9 @@ function openEditBoardModal(boardId) {
   document.getElementById("board-icon-input").value = board.icon || "📌";
   document.getElementById("board-vote-mode-toggle").checked = !!board.vote_mode;
 
+  const openToggle = document.getElementById("board-open-toggle");
+  if (openToggle) openToggle.checked = !board.is_closed;
+
   const bgType = board.background_type || "gradient";
   const radio = document.querySelector(`input[name="board_bg_type"][value="${bgType}"]`);
   if (radio) radio.checked = true;
@@ -897,6 +1115,8 @@ async function handleBoardFormSubmit(e) {
   const desc = document.getElementById("board-desc-input").value.trim();
   const icon = document.getElementById("board-icon-input").value || "📌";
   const voteMode = document.getElementById("board-vote-mode-toggle").checked;
+  const isOpen = document.getElementById("board-open-toggle")?.checked !== false;
+  const isClosed = !isOpen;
 
   const bgType = document.querySelector('input[name="board_bg_type"]:checked')?.value || "gradient";
   let bgValue = "";
@@ -910,15 +1130,29 @@ async function handleBoardFormSubmit(e) {
   try {
       if (id) {
         // Edição
-        const { error } = await supabaseClient.from("boards").update({
-          title: title,
-          description: desc,
-          icon: icon,
-          vote_mode: voteMode,
-          background_type: bgType,
-          background_value: bgValue
-        }).eq("id", id);
-        if (error) throw error;
+        localStorage.setItem("az_board_closed_" + id, isClosed ? "true" : "false");
+        try {
+          const { error } = await supabaseClient.from("boards").update({
+            title: title,
+            description: desc,
+            icon: icon,
+            vote_mode: voteMode,
+            background_type: bgType,
+            background_value: bgValue,
+            is_closed: isClosed
+          }).eq("id", id);
+          if (error) throw error;
+        } catch (dbErr) {
+          // Fallback caso a coluna is_closed ainda não tenha sido criada no banco
+          await supabaseClient.from("boards").update({
+            title: title,
+            description: desc,
+            icon: icon,
+            vote_mode: voteMode,
+            background_type: bgType,
+            background_value: bgValue
+          }).eq("id", id);
+        }
 
         // Atualização instantânea na tela do mural ativo
         if (state.activeBoard && state.activeBoard.id === id) {
@@ -928,30 +1162,53 @@ async function handleBoardFormSubmit(e) {
           state.activeBoard.vote_mode = voteMode;
           state.activeBoard.background_type = bgType;
           state.activeBoard.background_value = bgValue;
+          state.activeBoard.is_closed = isClosed;
 
           document.getElementById("board-view-icon").textContent = icon;
           document.getElementById("board-view-title").textContent = title;
           document.getElementById("board-view-desc").textContent = desc;
           applyBoardBackground(state.activeBoard);
+          updateBoardViewStatusUI();
         }
         showToast("Mural atualizado com sucesso!", "success");
       } else {
         // Criação
-        const { data, error } = await supabaseClient.from("boards").insert([{
-          title: title,
-          description: desc,
-          icon: icon,
-          vote_mode: voteMode,
-          background_type: bgType,
-          background_value: bgValue,
-          created_by: state.user?.email || MASTER_ADMIN
-        }]).select().single();
-        if (error) throw error;
-        showToast("Mural criado com sucesso!", "success");
-        if (data) {
-          openBoard(data);
+        let createdBoard = null;
+        try {
+          const { data, error } = await supabaseClient.from("boards").insert([{
+            title: title,
+            description: desc,
+            icon: icon,
+            vote_mode: voteMode,
+            background_type: bgType,
+            background_value: bgValue,
+            created_by: state.user?.email || MASTER_ADMIN,
+            is_closed: isClosed
+          }]).select().single();
+          if (error) throw error;
+          createdBoard = data;
+        } catch (dbErr) {
+          // Fallback se is_closed não estiver no schema
+          const { data, error } = await supabaseClient.from("boards").insert([{
+            title: title,
+            description: desc,
+            icon: icon,
+            vote_mode: voteMode,
+            background_type: bgType,
+            background_value: bgValue,
+            created_by: state.user?.email || MASTER_ADMIN
+          }]).select().single();
+          if (error) throw error;
+          createdBoard = data;
+        }
+
+        if (createdBoard) {
+          createdBoard.is_closed = isClosed;
+          localStorage.setItem("az_board_closed_" + createdBoard.id, isClosed ? "true" : "false");
+          showToast("Mural criado com sucesso!", "success");
+          openBoard(createdBoard);
           setTimeout(() => {
-            openShareModal(data.id);
+            openShareModal(createdBoard.id);
           }, 500);
         }
       }
@@ -983,6 +1240,69 @@ async function confirmDeleteBoard(boardId) {
   } finally {
     showLoader(false);
   }
+}
+
+// ============================================================================
+// ORGANIZAÇÃO DO MURAL: LAYOUT & ORDENAÇÃO (EXCLUSIVO ADMIN)
+// ============================================================================
+function openLayoutSortModal() {
+  if (!state.activeBoard) return;
+  const layout = state.currentLayout || 'masonry';
+  const sort = state.currentSort || 'recent';
+  const keepPinned = state.keepPinnedTop !== false;
+
+  const layoutRadio = document.querySelector(`input[name="opt_board_layout"][value="${layout}"]`);
+  if (layoutRadio) layoutRadio.checked = true;
+
+  const sortRadio = document.querySelector(`input[name="opt_board_sort"][value="${sort}"]`);
+  if (sortRadio) sortRadio.checked = true;
+
+  const pinnedToggle = document.getElementById("layout-sort-pinned-toggle");
+  if (pinnedToggle) pinnedToggle.checked = keepPinned;
+
+  openModal("modal-layout-sort");
+}
+
+async function saveBoardLayoutAndSort() {
+  if (!state.activeBoard) return;
+  const selectedLayout = document.querySelector('input[name="opt_board_layout"]:checked')?.value || 'masonry';
+  const selectedSort = document.querySelector('input[name="opt_board_sort"]:checked')?.value || 'recent';
+  const keepPinned = document.getElementById("layout-sort-pinned-toggle")?.checked !== false;
+
+  state.currentLayout = selectedLayout;
+  state.currentSort = selectedSort;
+  state.keepPinnedTop = keepPinned;
+
+  // Persistir localmente para este mural
+  localStorage.setItem(`az_board_layout_${state.activeBoard.id}`, selectedLayout);
+  localStorage.setItem(`az_board_sort_${state.activeBoard.id}`, selectedSort);
+  localStorage.setItem(`az_board_pinned_${state.activeBoard.id}`, String(keepPinned));
+
+  // Tenta persistir no Supabase (se as colunas existirem na tabela boards)
+  if (isUserAdmin()) {
+    try {
+      await supabaseClient.from("boards").update({
+        layout_mode: selectedLayout,
+        sort_mode: selectedSort
+      }).eq("id", state.activeBoard.id);
+    } catch(e) {
+      console.warn("Colunas de layout no Supabase ainda não criadas, persistido localmente:", e);
+    }
+  }
+
+  closeModal("modal-layout-sort");
+  renderCardsList();
+
+  const layoutLabels = { masonry: "Cascata (Masonry)", grid: "Grade Alinhada", timeline: "Linha do Tempo" };
+  const sortLabels = {
+    recent: "Mais recentes",
+    oldest: "Mais antigos",
+    votes: "Mais votados",
+    comments: "Mais comentados",
+    "alpha-asc": "Alfabética (A-Z)",
+    "alpha-desc": "Alfabética (Z-A)"
+  };
+  showToast(`Mural organizado: ${layoutLabels[selectedLayout]} • ${sortLabels[selectedSort]}!`, "success");
 }
 
 // ============================================================================
@@ -1056,7 +1376,11 @@ function renderCardsList() {
 
   container.innerHTML = "";
 
-  // Filtro de busca
+  // 1. Aplica classe do modo de layout selecionado (masonry, grid ou timeline)
+  const layout = state.currentLayout || "masonry";
+  container.className = `layout-${layout}`;
+
+  // 2. Filtro de busca
   let list = [...state.cards];
   if (state.currentSearch) {
     const q = state.currentSearch.toLowerCase();
@@ -1067,10 +1391,34 @@ function renderCardsList() {
     );
   }
 
-  // Ordenação
-  const sortMode = document.getElementById("board-sort-select")?.value || "recent";
-  if (sortMode === "alphabetical") {
-    list.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+  // 3. Critério de Ordenação configurado
+  const sort = state.currentSort || "recent";
+  const sortFn = (a, b) => {
+    switch (sort) {
+      case "oldest":
+        return new Date(a.created_at) - new Date(b.created_at);
+      case "votes":
+        return (b.vote_count || 0) - (a.vote_count || 0);
+      case "comments":
+        return (b.comment_count || 0) - (a.comment_count || 0);
+      case "alpha-asc":
+        return (a.title || "").localeCompare(b.title || "");
+      case "alpha-desc":
+        return (b.title || "").localeCompare(a.title || "");
+      case "recent":
+      default:
+        return new Date(b.created_at) - new Date(a.created_at);
+    }
+  };
+
+  if (state.keepPinnedTop !== false) {
+    const pinned = list.filter(c => (c.pinned || c.is_pinned));
+    const unpinned = list.filter(c => !(c.pinned || c.is_pinned));
+    pinned.sort(sortFn);
+    unpinned.sort(sortFn);
+    list = [...pinned, ...unpinned];
+  } else {
+    list.sort(sortFn);
   }
 
   if (list.length === 0) {
@@ -1208,7 +1556,23 @@ function renderCardsList() {
       </div>
     `;
 
-    container.appendChild(cardEl);
+    if (layout === "timeline") {
+      const wrapper = document.createElement("div");
+      wrapper.className = "timeline-item animate-fade-in";
+      wrapper.innerHTML = `
+        <div class="timeline-node">
+          <i data-lucide="sparkles" class="w-2.5 h-2.5 text-white"></i>
+        </div>
+        <div class="timeline-date-badge">
+          <i data-lucide="calendar" class="w-3 h-3 text-cyan-300"></i>
+          <span>${formatDate(card.created_at)}</span>
+        </div>
+      `;
+      wrapper.appendChild(cardEl);
+      container.appendChild(wrapper);
+    } else {
+      container.appendChild(cardEl);
+    }
   });
 
   if (window.lucide) lucide.createIcons();
@@ -1236,6 +1600,11 @@ function renderCardsList() {
 }
 
 function openNewCardModal() {
+  if (state.activeBoard?.is_closed && !isUserAdmin()) {
+    showToast("Este mural está encerrado para novas participações.", "warning");
+    return;
+  }
+
   state.editingCardId = null;
   state.pendingMediaFile = null;
   const form = document.getElementById("form-card");
@@ -1298,6 +1667,11 @@ function openEditCardModal(cardId) {
 async function handleCardFormSubmit(e) {
   e.preventDefault();
   if (!state.activeBoard) return;
+
+  if (state.activeBoard.is_closed && !isUserAdmin()) {
+    showToast("Este mural está encerrado para novas postagens.", "error");
+    return;
+  }
 
   const id = document.getElementById("card-id-hidden").value;
   const title = document.getElementById("card-title-input").value.trim();
@@ -1936,13 +2310,23 @@ function setupEventListeners() {
   // Navegação
   document.getElementById("header-logo-home")?.addEventListener("click", showDashboardView);
   document.getElementById("btn-back-to-dashboard")?.addEventListener("click", showDashboardView);
+  document.getElementById("btn-board-canvas-back")?.addEventListener("click", showDashboardView);
 
-  // Criação de Mural
+  // Criação & Configuração de Mural
   document.getElementById("btn-create-board-hero")?.addEventListener("click", openNewBoardModal);
   document.getElementById("btn-create-board-empty")?.addEventListener("click", openNewBoardModal);
+  document.getElementById("btn-create-board-drawer")?.addEventListener("click", openNewBoardModal);
+  document.getElementById("btn-toggle-board-status-drawer")?.addEventListener("click", () => {
+    if (state.activeBoard) toggleBoardOpenClose(state.activeBoard.id);
+  });
+  document.getElementById("btn-reopen-board-banner")?.addEventListener("click", () => {
+    if (state.activeBoard) toggleBoardOpenClose(state.activeBoard.id);
+  });
   document.getElementById("btn-board-settings")?.addEventListener("click", () => {
     if (state.activeBoard) openEditBoardModal(state.activeBoard.id);
   });
+  document.getElementById("btn-board-layout-sort")?.addEventListener("click", openLayoutSortModal);
+  document.getElementById("btn-save-layout-sort")?.addEventListener("click", saveBoardLayoutAndSort);
 
   // Criação de Card & Votação Flutuante
   document.getElementById("btn-add-card-header")?.addEventListener("click", openNewCardModal);
@@ -1950,7 +2334,13 @@ function setupEventListeners() {
   document.getElementById("btn-fab-add-card")?.addEventListener("click", openNewCardModal);
   document.getElementById("btn-fab-vote-board")?.addEventListener("click", openVotingModal);
 
-  // Ações do Mural
+  // Ações do Mural & Compartilhamento
+  document.getElementById("btn-share-board-canvas")?.addEventListener("click", () => {
+    if (state.activeBoard) openShareModal(state.activeBoard.id);
+  });
+  document.getElementById("btn-share-board-header")?.addEventListener("click", () => {
+    if (state.activeBoard) openShareModal(state.activeBoard.id);
+  });
   document.getElementById("btn-vote-board")?.addEventListener("click", openVotingModal);
   document.getElementById("btn-submit-vote")?.addEventListener("click", submitEnqueteVote);
   document.getElementById("btn-stats-board")?.addEventListener("click", openAdminVoteStatsModal);
@@ -2138,9 +2528,10 @@ function renderSolidColorsList() {
     item.type = "button";
     item.className = "p-2 rounded-xl border border-gray-200 bg-white hover:border-[#D75B36] transition-all flex items-center gap-2 text-left group solid-item";
     item.dataset.value = c.value;
+    const isLight = isLightBackground("color", c.value);
     item.innerHTML = `
-      <div class="w-6 h-6 rounded-lg shadow-sm flex-shrink-0 flex items-center justify-center text-white" style="background-color: ${c.value}">
-        <i data-lucide="check" class="w-3.5 h-3.5 opacity-0 check-icon"></i>
+      <div class="w-6 h-6 rounded-lg shadow-sm flex-shrink-0 flex items-center justify-center border border-black/15 ${isLight ? 'text-gray-900' : 'text-white'}" style="background-color: ${c.value}">
+        <i data-lucide="check" class="w-3.5 h-3.5 opacity-0 check-icon stroke-[2.5]"></i>
       </div>
       <span class="text-[11px] font-body-semibold text-gray-700 group-hover:text-[#D75B36] truncate leading-tight">${c.name}</span>
     `;
