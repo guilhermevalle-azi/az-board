@@ -639,6 +639,8 @@ function setViewMode(mode) {
     showToast("Modo Admin ativado: ferramentas completas visíveis.", "info");
   } else {
     showToast("Visão do Usuário ativada: você está visualizando como um colaborador comum.", "info");
+    // Fecha a gaveta para dar a visão limpa real do mural ao usuário
+    toggleAdminDrawer(false);
   }
 
   // Atualiza controles na tela do mural ativo
@@ -649,7 +651,10 @@ function setViewMode(mode) {
     const btnStats = document.getElementById("btn-stats-board");
     const btnSettings = document.getElementById("btn-board-settings");
 
-    if (voteBadge) voteBadge.classList.toggle("hidden", !state.activeBoard.vote_mode || !effectiveAdmin);
+    const btnFabVote = document.getElementById("btn-fab-vote-board");
+    if (btnFabVote) btnFabVote.classList.toggle("hidden", !state.activeBoard.vote_mode);
+    if (voteBadge) voteBadge.classList.toggle("hidden", !state.activeBoard.vote_mode);
+
     if (btnVote) btnVote.classList.toggle("hidden", !state.activeBoard.vote_mode || !effectiveAdmin);
     if (btnStats) btnStats.classList.toggle("hidden", !state.activeBoard.vote_mode || !effectiveAdmin);
 
@@ -665,6 +670,7 @@ function updateViewModeUI() {
   const btnUser = document.getElementById("btn-view-mode-user");
   const tabLabel = document.getElementById("admin-tab-label");
   const tabIcon = document.getElementById("admin-tab-icon");
+  const adminTools = document.getElementById("admin-tools-group");
 
   if (state.viewMode === "admin") {
     if (btnAdmin) {
@@ -678,6 +684,9 @@ function updateViewModeUI() {
       tabIcon.setAttribute("data-lucide", "shield");
       tabIcon.className = "w-3.5 h-3.5 text-[#D75B36]";
     }
+    if (adminTools) {
+      adminTools.classList.remove("hidden");
+    }
   } else {
     if (btnAdmin) {
       btnAdmin.className = "px-3 py-1.5 rounded-lg text-xs font-subtitle-semibold text-gray-300 hover:text-white transition-all flex items-center gap-1.5 bg-transparent";
@@ -689,6 +698,9 @@ function updateViewModeUI() {
     if (tabIcon) {
       tabIcon.setAttribute("data-lucide", "eye");
       tabIcon.className = "w-3.5 h-3.5 text-emerald-400";
+    }
+    if (adminTools) {
+      adminTools.classList.add("hidden");
     }
   }
 
@@ -739,14 +751,18 @@ function openBoard(board) {
   document.getElementById("board-view-desc").textContent = board.description || "";
 
   const voteBadge = document.getElementById("board-view-vote-badge");
+  const btnFabVote = document.getElementById("btn-fab-vote-board");
   const btnVote = document.getElementById("btn-vote-board");
   const btnStats = document.getElementById("btn-stats-board");
   const btnSettings = document.getElementById("btn-board-settings");
 
   const effectiveAdmin = isUserAdmin();
 
-  // Votação e Apuração: Exclusivos para Administradores
-  if (voteBadge) voteBadge.classList.toggle("hidden", !board.vote_mode || !effectiveAdmin);
+  // Votação: Botão flutuante aparente ao lado do novo card para todos quando ativa
+  if (btnFabVote) btnFabVote.classList.toggle("hidden", !board.vote_mode);
+  if (voteBadge) voteBadge.classList.toggle("hidden", !board.vote_mode);
+
+  // Apuração e Ações na gaveta admin
   if (btnVote) btnVote.classList.toggle("hidden", !board.vote_mode || !effectiveAdmin);
   if (btnStats) btnStats.classList.toggle("hidden", !board.vote_mode || !effectiveAdmin);
 
@@ -1354,8 +1370,12 @@ async function handleCardVoteClick(cardId) {
 }
 
 function openVotingModal() {
-  if (!state.user?.isAdmin && !state.user?.isMasterAdmin) {
-    showToast("Apenas administradores têm acesso à votação.", "error");
+  if (!state.user) {
+    showToast("Faça login para votar.", "error");
+    return;
+  }
+  if (!state.activeBoard?.vote_mode) {
+    showToast("A votação não está ativa neste mural.", "info");
     return;
   }
 
@@ -1388,8 +1408,12 @@ function openVotingModal() {
 }
 
 async function submitEnqueteVote() {
-  if (!state.user?.isAdmin && !state.user?.isMasterAdmin) {
-    showToast("Apenas administradores têm acesso à votação.", "error");
+  if (!state.user) {
+    showToast("Faça login para votar.", "error");
+    return;
+  }
+  if (!state.activeBoard?.vote_mode) {
+    showToast("A votação não está ativa neste mural.", "info");
     return;
   }
 
@@ -1686,10 +1710,11 @@ function setupEventListeners() {
     if (state.activeBoard) openEditBoardModal(state.activeBoard.id);
   });
 
-  // Criação de Card
+  // Criação de Card & Votação Flutuante
   document.getElementById("btn-add-card-header")?.addEventListener("click", openNewCardModal);
   document.getElementById("btn-add-card-empty")?.addEventListener("click", openNewCardModal);
   document.getElementById("btn-fab-add-card")?.addEventListener("click", openNewCardModal);
+  document.getElementById("btn-fab-vote-board")?.addEventListener("click", openVotingModal);
 
   // Ações do Mural
   document.getElementById("btn-vote-board")?.addEventListener("click", openVotingModal);
@@ -1774,6 +1799,9 @@ function setupEventListeners() {
 
   // Compartilhamento de Mural
   document.getElementById("btn-share-board-header")?.addEventListener("click", () => {
+    if (state.activeBoard) openShareModal(state.activeBoard.id);
+  });
+  document.getElementById("btn-share-board-canvas")?.addEventListener("click", () => {
     if (state.activeBoard) openShareModal(state.activeBoard.id);
   });
   document.getElementById("btn-copy-share-url")?.addEventListener("click", handleCopyShareUrl);
