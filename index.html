@@ -215,71 +215,122 @@
       <!-- ====================================================================
            TELA 2: QUADRO ATIVO (VISUALIZAÇÃO COMPLETA DO MURAL)
            ==================================================================== -->
-      <div id="view-board" class="hidden flex-1 flex flex-col min-h-screen">
+      <!-- ====================================================================
+           TELA 2: QUADRO ATIVO (VISUALIZAÇÃO COMPLETA DO MURAL)
+           ==================================================================== -->
+      <div id="view-board" class="hidden flex-1 flex flex-col min-h-screen relative pb-24">
         
-        <!-- Barra de Controle do Quadro -->
-        <div class="glass-header sticky top-[57px] z-30 px-4 sm:px-6 py-2.5 border-b border-white/10">
-          <div class="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-3">
-            
-            <!-- Botão Voltar + Informações do Quadro -->
-            <div class="flex items-center gap-3">
-              <button id="btn-back-to-dashboard" class="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all" title="Voltar aos Murais">
-                <i data-lucide="arrow-left" class="w-4 h-4"></i>
-              </button>
-              <div class="text-2xl" id="board-view-icon">📌</div>
-              <div>
-                <div class="flex items-center gap-2">
-                  <h2 class="font-title text-base text-white line-clamp-1 leading-tight" id="board-view-title">Título do Quadro</h2>
-                  <span id="board-view-vote-badge" class="hidden text-[9px] uppercase font-subtitle-semibold bg-[#D75B36] text-white px-2 py-0.5 rounded-full font-bold">
-                    Votação Ativa
-                  </span>
-                </div>
-                <p class="font-body text-xs text-[#CDCDCD] line-clamp-1 max-w-md" id="board-view-desc">Descrição do mural...</p>
-              </div>
-            </div>
-
-            <!-- Ações e Filtros do Quadro -->
-            <div class="flex items-center gap-2">
+        <!-- ABA E BARRA RETRÁTIL DE CONTROLE ADMIN (TOPO) -->
+        <div id="admin-collapsible-wrapper" class="hidden fixed top-0 left-0 right-0 z-50 flex flex-col items-center pointer-events-none transition-all duration-300">
+          
+          <!-- Barra de Ferramentas Admin que Desce ao Clicar -->
+          <div id="admin-sliding-toolbar" class="w-full bg-[#0A2334]/95 backdrop-blur-xl border-b border-white/20 shadow-2xl transition-all duration-300 pointer-events-auto overflow-hidden max-h-0 opacity-0">
+            <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3 text-white">
               
-              <!-- Botão Votar (Exibido apenas em quadros com modo votação) -->
-              <button id="btn-vote-board" class="hidden px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-subtitle-semibold flex items-center gap-1.5 shadow-md shadow-emerald-600/30 transition-all">
-                <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
-                <span class="hidden sm:inline">Votar na Enquete</span>
-              </button>
+              <!-- Esquerda: Voltar aos Murais & Alternador de Visão -->
+              <div class="flex items-center gap-3">
+                <button id="btn-back-to-dashboard" class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-subtitle-semibold flex items-center gap-1.5 transition-all" title="Voltar aos Murais">
+                  <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+                  <span>Murais</span>
+                </button>
 
-              <!-- Botão Apuração / Estatísticas (Admin ou Modo Votação) -->
-              <button id="btn-stats-board" class="hidden px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs flex items-center gap-1.5 transition-all" title="Ver Apuração dos Votos">
-                <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-amber-400"></i>
-                <span class="hidden md:inline font-subtitle-semibold text-xs">Apuração</span>
-              </button>
-
-              <!-- Ordenação -->
-              <div class="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-xl border border-white/15">
-                <i data-lucide="arrow-up-down" class="w-3.5 h-3.5 text-gray-300"></i>
-                <select id="board-sort-select" class="bg-transparent text-xs text-white focus:outline-none cursor-pointer font-body">
-                  <option value="recent" class="bg-[#0A2334] text-white">Mais Recentes</option>
-                  <option value="votes" class="bg-[#0A2334] text-white">Mais Votados</option>
-                  <option value="alphabetical" class="bg-[#0A2334] text-white">A-Z</option>
-                </select>
+                <!-- Alternador de Visão: Modo Admin vs Visão do Usuário -->
+                <div class="flex items-center bg-black/40 p-0.5 rounded-xl border border-white/10">
+                  <button type="button" id="btn-view-mode-admin" class="px-3 py-1.5 rounded-lg text-xs font-subtitle-semibold transition-all bg-[#D75B36] text-white shadow-sm flex items-center gap-1.5">
+                    <i data-lucide="shield" class="w-3 h-3 text-white"></i>
+                    <span>Modo Admin</span>
+                  </button>
+                  <button type="button" id="btn-view-mode-user" class="px-3 py-1.5 rounded-lg text-xs font-subtitle-semibold text-gray-300 hover:text-white transition-all flex items-center gap-1.5">
+                    <i data-lucide="eye" class="w-3 h-3 text-gray-400"></i>
+                    <span>Visão Usuário</span>
+                  </button>
+                </div>
               </div>
 
-              <!-- Exportar PNG -->
-              <button id="btn-export-png" class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all" title="Exportar Imagem do Quadro (PNG)">
-                <i data-lucide="download" class="w-3.5 h-3.5"></i>
-              </button>
+              <!-- Direita: Ferramentas Administrativas Agrupadas -->
+              <div class="flex items-center flex-wrap gap-2">
+                <!-- Votação Oficial Enquete -->
+                <button id="btn-vote-board" class="hidden px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-subtitle-semibold flex items-center gap-1.5 shadow-sm transition-all">
+                  <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+                  <span>Votar na Enquete</span>
+                </button>
 
-              <!-- Configurações do Quadro (Admin/Dono) -->
-              <button id="btn-board-settings" class="hidden p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all" title="Configurações do Mural">
-                <i data-lucide="sliders" class="w-3.5 h-3.5"></i>
-              </button>
+                <!-- Apuração de Votos -->
+                <button id="btn-stats-board" class="hidden px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-subtitle-semibold flex items-center gap-1.5 transition-all">
+                  <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i>
+                  <span>Apuração</span>
+                </button>
 
-              <!-- Botão Adicionar Card -->
-              <button id="btn-add-card-header" class="px-3.5 py-1.5 rounded-xl bg-[#D75B36] hover:bg-[#DC7B52] text-white font-subtitle-semibold text-xs flex items-center gap-1.5 shadow-lg shadow-[#D75B36]/30 transition-all">
-                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-                <span>NOVO CARD</span>
-              </button>
+                <!-- Configurar Mural (Fundo, Título, Modo Votação) -->
+                <button id="btn-board-settings" class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-subtitle-semibold flex items-center gap-1.5 transition-all" title="Configurar Aparência e Regras do Mural">
+                  <i data-lucide="sliders" class="w-3.5 h-3.5 text-[#DC7B52]"></i>
+                  <span>Personalizar Mural</span>
+                </button>
+
+                <!-- Compartilhar Mural -->
+                <button id="btn-share-board-header" class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-subtitle-semibold flex items-center gap-1.5 transition-all" title="Compartilhar Link do Mural">
+                  <i data-lucide="share-2" class="w-3.5 h-3.5 text-emerald-400"></i>
+                  <span>Compartilhar</span>
+                </button>
+
+                <!-- Exportar PNG -->
+                <button id="btn-export-png" class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-subtitle-semibold flex items-center gap-1.5 transition-all" title="Exportar Imagem do Mural">
+                  <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                  <span class="hidden sm:inline">Exportar PNG</span>
+                </button>
+
+                <!-- Gestão Admins -->
+                <button id="btn-manage-admins-drawer" class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-subtitle-semibold flex items-center gap-1.5 transition-all" title="Gerenciar Administradores">
+                  <i data-lucide="shield" class="w-3.5 h-3.5 text-blue-400"></i>
+                  <span>Admins</span>
+                </button>
+
+                <!-- Sair (Logout) -->
+                <button id="btn-logout-drawer" class="p-1.5 rounded-xl bg-white/10 hover:bg-red-500/20 text-gray-300 hover:text-red-300 transition-all ml-1" title="Sair da Conta">
+                  <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+
             </div>
+          </div>
 
+          <!-- Pílula/Aba "Admin" no topo que desce a barra ao clicar -->
+          <button type="button" id="btn-admin-tab-toggle" class="pointer-events-auto px-4 py-1.5 rounded-b-2xl bg-[#0A2334]/90 hover:bg-[#0A2334] text-white border-b border-x border-white/20 shadow-xl flex items-center gap-2 text-xs font-subtitle-semibold transition-all hover:translate-y-0.5 cursor-pointer">
+            <i data-lucide="shield" class="w-3.5 h-3.5 text-[#D75B36]" id="admin-tab-icon"></i>
+            <span id="admin-tab-label">Admin</span>
+            <i data-lucide="chevron-down" id="admin-tab-chevron" class="w-3.5 h-3.5 text-gray-300 transition-transform duration-300"></i>
+          </button>
+
+        </div>
+
+        <!-- Cabeçalho Limpo Integrado no Mural (Diretamente no Quadro) -->
+        <div class="px-4 sm:px-8 pt-8 pb-3 max-w-[1600px] mx-auto w-full flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div class="flex items-start sm:items-center gap-4">
+            <div class="text-4xl sm:text-5xl select-none drop-shadow-md" id="board-view-icon">📌</div>
+            <div>
+              <div class="flex items-center gap-2.5">
+                <h1 class="font-title text-2xl sm:text-3xl lg:text-4xl text-white font-semibold tracking-tight drop-shadow-md leading-tight" id="board-view-title">Título do Quadro</h1>
+                <span id="board-view-vote-badge" class="hidden text-[9px] uppercase font-subtitle-semibold bg-[#D75B36] text-white px-2.5 py-0.5 rounded-full font-bold shadow-sm">
+                  Votação Ativa
+                </span>
+              </div>
+              <p class="font-body text-xs sm:text-sm text-white/85 drop-shadow max-w-2xl mt-1 leading-relaxed" id="board-view-desc">Descrição do mural...</p>
+            </div>
+          </div>
+
+          <!-- Filtro de Busca & Ordenação Rápida Integrada (Glass Pill) -->
+          <div class="flex items-center gap-2.5 self-start sm:self-auto">
+            <div class="relative">
+              <i data-lucide="search" class="w-3.5 h-3.5 text-white/60 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+              <input type="text" id="board-search-input" placeholder="Pesquisar neste mural..." class="pl-8 pr-3 py-1.5 bg-black/30 hover:bg-black/40 focus:bg-black/50 backdrop-blur-md border border-white/20 rounded-full text-xs text-white placeholder-white/60 focus:outline-none focus:ring-1 focus:ring-[#D75B36] transition-all font-body w-40 sm:w-56" />
+            </div>
+            <div class="bg-black/30 hover:bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 flex items-center gap-1.5">
+              <i data-lucide="arrow-up-down" class="w-3.5 h-3.5 text-white/60"></i>
+              <select id="board-sort-select" class="bg-transparent text-xs text-white focus:outline-none cursor-pointer font-body">
+                <option value="recent" class="bg-[#0A2334] text-white">Mais Recentes</option>
+                <option value="alphabetical" class="bg-[#0A2334] text-white">A-Z</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -301,6 +352,14 @@
             </button>
           </div>
         </div>
+
+        <!-- Botão Flutuante de Novo Card (FAB) no Canto Inferior Direito -->
+        <button id="btn-fab-add-card" class="fixed bottom-6 right-6 z-40 pl-4 pr-5 py-3.5 rounded-full bg-[#D75B36] hover:bg-[#DC7B52] text-white font-subtitle-semibold text-sm shadow-2xl shadow-black/40 flex items-center gap-2.5 hover:scale-105 active:scale-95 transition-all border border-white/20" title="Criar Novo Card">
+          <div class="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+            <i data-lucide="plus" class="w-4 h-4 stroke-[2.5]"></i>
+          </div>
+          <span class="tracking-wider uppercase font-bold text-xs sm:text-sm">NOVO CARD</span>
+        </button>
 
       </div>
 
@@ -365,7 +424,9 @@
               <label class="cursor-pointer">
                 <input type="radio" name="card_type" value="youtube" class="peer sr-only">
                 <div class="p-2 rounded-xl border border-gray-200 peer-checked:border-[#D75B36] peer-checked:bg-[#FFF5F0] peer-checked:text-[#D75B36] text-center text-xs transition-all">
-                  <i data-lucide="youtube" class="w-4 h-4 mx-auto mb-1"></i>
+                  <svg class="w-4 h-4 mx-auto mb-1 text-red-600 peer-checked:text-[#D75B36]" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                  </svg>
                   <span class="text-[10px] font-semibold">YouTube</span>
                 </div>
               </label>
@@ -419,11 +480,11 @@
             </div>
           </div>
 
-          <!-- Fixar no Topo (Pin) -->
-          <div class="p-2.5 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
+          <!-- Fixar no Topo (Exclusivo Administrador) -->
+          <div id="card-pinned-container" class="hidden p-2.5 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
             <div>
               <span class="font-subtitle-semibold text-xs text-[#0A2334] block">Fixar no Início do Mural</span>
-              <span class="text-[10px] text-gray-500">Mantém o card em destaque no topo.</span>
+              <span class="text-[10px] text-gray-500">Mantém o card em destaque no topo (exclusivo para administradores).</span>
             </div>
             <label class="relative inline-flex items-center cursor-pointer">
               <input type="checkbox" id="card-pinned-toggle" class="sr-only peer">
@@ -497,43 +558,80 @@
 
           <!-- Tipo de Fundo -->
           <div>
-            <label class="block font-subtitle-semibold text-xs text-[#0A2334] mb-1">Estilo do Fundo</label>
-            <div class="grid grid-cols-3 gap-2 mb-2">
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block font-subtitle-semibold text-xs text-[#0A2334]">Estilo do Fundo</label>
+              <span class="text-[10px] text-[#D75B36] font-body-semibold">Atualização em tempo real</span>
+            </div>
+
+            <!-- Preview do Fundo Selecionado -->
+            <div id="board-bg-preview-box" class="w-full h-16 rounded-xl mb-3 border border-gray-200 shadow-inner flex items-center justify-center text-white font-title text-xs relative overflow-hidden transition-all duration-300" style="background: linear-gradient(135deg, #0A2334 0%, #173057 50%, #D75B36 100%);">
+              <div class="absolute inset-0 bg-black/20"></div>
+              <span class="relative z-10 px-3 py-1 rounded-lg bg-black/40 backdrop-blur-sm shadow-sm flex items-center gap-1.5">
+                <i data-lucide="eye" class="w-3.5 h-3.5"></i> Pré-visualização do Fundo
+              </span>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 mb-2.5">
               <label class="cursor-pointer">
                 <input type="radio" name="board_bg_type" value="gradient" id="bg-type-gradient" class="peer sr-only" checked>
-                <div class="p-2 rounded-xl border border-gray-200 peer-checked:border-[#D75B36] peer-checked:bg-[#FFF5F0] peer-checked:text-[#D75B36] text-center text-xs transition-all">
-                  <span class="text-[10px] font-semibold">Gradiente AZ</span>
+                <div class="p-2 rounded-xl border border-gray-200 peer-checked:border-[#D75B36] peer-checked:bg-[#FFF5F0] peer-checked:text-[#D75B36] text-center text-xs transition-all flex items-center justify-center gap-1">
+                  <i data-lucide="palette" class="w-3.5 h-3.5"></i>
+                  <span class="text-[10px] font-semibold">Gradientes</span>
                 </div>
               </label>
 
               <label class="cursor-pointer">
                 <input type="radio" name="board_bg_type" value="color" id="bg-type-color" class="peer sr-only">
-                <div class="p-2 rounded-xl border border-gray-200 peer-checked:border-[#D75B36] peer-checked:bg-[#FFF5F0] peer-checked:text-[#D75B36] text-center text-xs transition-all">
-                  <span class="text-[10px] font-semibold">Cor Sólida</span>
+                <div class="p-2 rounded-xl border border-gray-200 peer-checked:border-[#D75B36] peer-checked:bg-[#FFF5F0] peer-checked:text-[#D75B36] text-center text-xs transition-all flex items-center justify-center gap-1">
+                  <i data-lucide="disc" class="w-3.5 h-3.5"></i>
+                  <span class="text-[10px] font-semibold">Cores Sólidas</span>
                 </div>
               </label>
 
               <label class="cursor-pointer">
                 <input type="radio" name="board_bg_type" value="image" id="bg-type-image" class="peer sr-only">
-                <div class="p-2 rounded-xl border border-gray-200 peer-checked:border-[#D75B36] peer-checked:bg-[#FFF5F0] peer-checked:text-[#D75B36] text-center text-xs transition-all">
-                  <span class="text-[10px] font-semibold">Link Imagem</span>
+                <div class="p-2 rounded-xl border border-gray-200 peer-checked:border-[#D75B36] peer-checked:bg-[#FFF5F0] peer-checked:text-[#D75B36] text-center text-xs transition-all flex items-center justify-center gap-1">
+                  <i data-lucide="image" class="w-3.5 h-3.5"></i>
+                  <span class="text-[10px] font-semibold">Imagem</span>
                 </div>
               </label>
             </div>
 
             <!-- Paleta de Gradientes -->
-            <div id="bg-presets-gradient" class="grid grid-cols-3 gap-2">
+            <div id="bg-presets-gradient" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-1">
               <!-- Renderizado dinamicamente -->
             </div>
 
             <!-- Paleta de Cores Sólidas -->
-            <div id="bg-presets-color" class="hidden grid grid-cols-3 gap-2">
+            <div id="bg-presets-color" class="hidden grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-1">
               <!-- Renderizado dinamicamente -->
             </div>
 
-            <!-- Imagem Personalizada URL -->
-            <div id="bg-custom-image" class="hidden">
-              <input type="url" id="board-bg-image-url" placeholder="https://exemplo.com/fundo.jpg" class="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs focus:outline-none focus:border-[#D75B36]" />
+            <!-- Imagem Personalizada (Upload Direto ou Link) -->
+            <div id="bg-custom-image" class="hidden space-y-2.5">
+              <!-- Upload do Dispositivo -->
+              <div class="p-3.5 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 text-center">
+                <input type="file" id="board-bg-file-input" accept="image/jpeg,image/png,image/webp,image/gif" class="hidden" />
+                <button type="button" id="btn-upload-board-bg" class="px-3.5 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-[#0A2334] hover:bg-gray-100 shadow-sm flex items-center gap-1.5 mx-auto transition-all">
+                  <i data-lucide="upload-cloud" class="w-4 h-4 text-[#D75B36]"></i>
+                  <span>Enviar Imagem do Dispositivo</span>
+                </button>
+                <p class="text-[10px] text-gray-400 mt-1.5">Armazenada com alta velocidade no Supabase Storage.</p>
+
+                <!-- Progresso do Upload -->
+                <div id="board-bg-upload-progress" class="hidden mt-2.5">
+                  <div class="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                    <div id="board-bg-progress-bar" class="bg-[#D75B36] h-1.5 transition-all duration-300" style="width: 0%"></div>
+                  </div>
+                  <span class="text-[10px] text-[#D75B36] font-semibold mt-1 block">Enviando imagem de fundo...</span>
+                </div>
+              </div>
+
+              <!-- Ou Colar URL Externa -->
+              <div>
+                <label class="block text-[11px] font-body text-gray-500 mb-1">Ou cole a URL de uma imagem da internet:</label>
+                <input type="url" id="board-bg-image-url" placeholder="https://exemplo.com/fundo.jpg" class="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs focus:outline-none focus:border-[#D75B36] font-body" />
+              </div>
             </div>
           </div>
 
@@ -707,6 +805,55 @@
         <button type="button" class="btn-close-modal absolute top-3 right-3 bg-black/60 text-white p-2 rounded-full hover:bg-black" data-modal="modal-media-zoom">
           <i data-lucide="x" class="w-4 h-4"></i>
         </button>
+      </div>
+    </div>
+
+    <!-- MODAL 9: COMPARTILHAR MURAL (ACESSO DIRETO) -->
+    <div id="modal-share-board" class="hidden fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div class="glass-modal w-full max-w-md rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden my-auto animate-fade-in">
+        <div class="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between bg-white flex-shrink-0">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <i data-lucide="share-2" class="w-4 h-4"></i>
+            </div>
+            <h3 class="font-title text-sm text-[#0A2334]">Compartilhar Mural</h3>
+          </div>
+          <button type="button" class="btn-close-modal text-gray-400 hover:text-gray-600 p-1" data-modal="modal-share-board">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div class="p-5 bg-white space-y-4">
+          <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+            <span id="share-modal-icon" class="text-2xl flex-shrink-0">📌</span>
+            <div class="min-w-0 flex-1">
+              <h4 id="share-modal-title" class="font-title text-xs text-[#0A2334] truncate">Título do Mural</h4>
+              <p class="text-[10px] text-gray-500 line-clamp-1">Acesso direto ao mural para toda a equipe AZ.</p>
+            </div>
+          </div>
+
+          <div>
+            <label class="block font-subtitle-semibold text-xs text-[#0A2334] mb-1.5">Link de Compartilhamento Direto</label>
+            <div class="flex items-center gap-2">
+              <input type="text" id="share-board-url-input" readonly class="flex-1 px-3 py-2 bg-gray-50 rounded-xl border border-gray-200 text-xs font-mono text-gray-700 select-all focus:outline-none focus:border-[#D75B36]" />
+              <button type="button" id="btn-copy-share-url" class="px-3.5 py-2 bg-[#D75B36] hover:bg-[#DC7B52] text-white rounded-xl text-xs font-subtitle-semibold flex items-center gap-1.5 shadow-sm transition-all flex-shrink-0">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                <span id="btn-copy-share-url-text">Copiar</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="p-3 bg-blue-50/80 rounded-xl border border-blue-100 text-[11px] text-[#173057] flex items-start gap-2">
+            <i data-lucide="info" class="w-4 h-4 text-[#173057] flex-shrink-0 mt-0.5"></i>
+            <span>Colaboradores que abrirem este link entrarão <b>diretamente neste mural</b> após o login, com foco exclusivo neste projeto.</span>
+          </div>
+        </div>
+
+        <div class="p-3.5 border-t border-gray-100 bg-gray-50 flex items-center justify-end">
+          <button type="button" class="btn-close-modal px-4 py-1.5 bg-[#0A2334] text-white rounded-xl text-xs font-subtitle-semibold hover:bg-[#173057]" data-modal="modal-share-board">
+            Fechar
+          </button>
+        </div>
       </div>
     </div>
 
