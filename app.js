@@ -202,9 +202,9 @@ async function handleAuthenticatedUser(supabaseUser) {
   const mainHeader = document.getElementById("main-app-header");
   if (mainHeader) mainHeader.classList.add("hidden");
 
-  // Garante fundo branco na tela inicial
+  // Garante fundo neutro suave moderno na tela inicial
   const bgInit = document.getElementById("board-custom-bg");
-  if (bgInit) bgInit.style.background = "#FFFFFF";
+  if (bgInit) bgInit.style.background = "#F4F6F8";
 
   // Alternar telas imediatamente para transição instantânea
   document.getElementById("view-login").classList.add("hidden");
@@ -573,18 +573,18 @@ function renderBoardsGrid() {
 
   const effectiveAdmin = isUserAdmin();
 
-  // Ajusta título e descrição de boas-vindas no Hero conforme o perfil do usuário
+  // Ajusta título e descrição de boas-vindas no Hero com convite acolhedor
   const heroTitle = document.getElementById("dashboard-hero-title");
   if (heroTitle) {
     heroTitle.textContent = effectiveAdmin
-      ? "Gestão de Murais Colaborativos"
-      : "Murais Colaborativos";
+      ? "Murais da Equipe & Gestão"
+      : "Escolha um mural e participe!";
   }
   const heroDesc = document.getElementById("dashboard-hero-desc");
   if (heroDesc) {
     heroDesc.textContent = effectiveAdmin
-      ? "Gerencie os murais da organização, acompanhe as contribuições da equipe e conduza as votações e feedbacks das iniciativas."
-      : "Explore os murais ativos da equipe, compartilhe ideias com fotos e vídeos, envie feedbacks e vote nas iniciativas corporativas.";
+      ? "Acompanhe a participação da equipe nos murais abertos, gerencie os temas em debate e conduza as votações e feedbacks das iniciativas."
+      : "Seja bem-vindo(a)! Escolha um dos murais abertos abaixo para ver as novidades da equipe, compartilhar suas ideias com fotos e vídeos, interagir nos comentários e votar nos projetos em destaque.";
   }
 
   // Botões de criar mural: visíveis apenas no modo Admin
@@ -614,7 +614,7 @@ function renderBoardsGrid() {
 
   visibleBoards.forEach(board => {
     const cardEl = document.createElement("div");
-    cardEl.className = "rounded-2xl overflow-hidden border border-gray-200/90 shadow-sm flex flex-col cursor-pointer group hover:shadow-xl hover:-translate-y-0.5 transition-all relative bg-white";
+    cardEl.className = "rounded-2xl overflow-hidden border border-slate-200/90 shadow-md hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 flex flex-col cursor-pointer group relative bg-white ring-1 ring-black/5";
     
     // Background header
     let bgStyle = "background: linear-gradient(135deg, #0A2334 0%, #173057 100%);";
@@ -1044,10 +1044,17 @@ function showDashboardView() {
     history.replaceState(null, "", newUrl.pathname);
   } catch(e) {}
 
-  // Restaura fundo padrão
+  // Restaura fundo neutro suave moderno para o dashboard (#F4F6F8)
   const bgEl = document.getElementById("board-custom-bg");
   if (bgEl) {
-    bgEl.style.background = "#FFFFFF";
+    bgEl.style.background = "#F4F6F8";
+  }
+
+  // Desativa qualquer trava de altura da timeline
+  document.body.classList.remove("timeline-mode-active");
+  const viewBoard = document.getElementById("view-board");
+  if (viewBoard) {
+    viewBoard.classList.remove("layout-timeline-active", "board-light-theme", "board-orange-theme", "board-dark-theme");
   }
 
   // Atualiza gaveta admin para o contexto de dashboard
@@ -1057,32 +1064,47 @@ function showDashboardView() {
   renderBoardsGrid();
 }
 
-function isLightBackground(bgType, bgValue) {
-  if (!bgValue) return false;
+// Identifica se o fundo é Claro (Light), Laranja/Quente (Orange) ou Escuro (Dark)
+function getBackgroundThemeCategory(bgType, bgValue) {
+  if (!bgValue) return "dark";
+  const val = bgValue.trim().toLowerCase();
+
+  // 1. Categoria Quente / Laranja / Vermelho / Cobre (ex: #D75B36, #DC2626, #7c2d12, Fire Amber)
+  const isOrangeExplicit = 
+    val === "#d75b36" || val === "#dc7b52" || val === "#7c2d12" || 
+    val === "#dc2626" || val === "#ef4444" || val === "#ea580c" || 
+    val === "#f97316" || val.includes("fire amber") ||
+    (val.includes("#7c2d12") && val.includes("#ea580c"));
+
+  if (isOrangeExplicit) {
+    return "orange";
+  }
+
+  // 2. Categoria Clara (Branco, Amarelos, Tons Pastéis, Bege, etc.)
   if (bgType === "color") {
-    let hex = bgValue.replace("#", "").trim();
+    let hex = val.replace("#", "").trim();
     if (hex.length === 3) hex = hex.split("").map(ch => ch + ch).join("");
     if (hex.length === 6) {
       const r = parseInt(hex.substring(0, 2), 16);
       const g = parseInt(hex.substring(2, 4), 16);
       const b = parseInt(hex.substring(4, 6), 16);
       const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-      return luminance > 165;
+      if (luminance > 160) return "light";
     }
   } else if (bgType === "gradient") {
-    const lower = bgValue.toLowerCase();
-    return (
-      lower.includes("#ffffff") ||
-      lower.includes("#f8fafc") ||
-      lower.includes("#e0f2fe") ||
-      lower.includes("#fef3c7") ||
-      lower.includes("#ecfdf5") ||
-      lower.includes("#f5f3ff") ||
-      lower.includes("#faf5ef") ||
-      lower.includes("#e2e8f0")
-    );
+    const lightIndicators = [
+      "#ffffff", "#f8fafc", "#f1f5f9", "#e2e8f0", "#e0f2fe", 
+      "#bae6fd", "#7dd3fc", "#fef3c7", "#fde68a", "#fed7aa", 
+      "#fef08a", "#facc15", "#ecfdf5", "#d1fae5", "#a7f3d0", 
+      "#bbf7d0", "#f5f3ff", "#ede9fe", "#ddd6fe", "#faf5ef", 
+      "#f5ebe1", "#ead8c7", "#f5ebe0", "#fbcfeb", "#fbcfe8"
+    ];
+    if (lightIndicators.some(ind => val.includes(ind))) {
+      return "light";
+    }
   }
-  return false;
+
+  return "dark";
 }
 
 function applyBoardBackground(board) {
@@ -1097,11 +1119,12 @@ function applyBoardBackground(board) {
     bgEl.style.background = "linear-gradient(135deg, #0A2334 0%, #173057 100%)";
   }
 
-  // Adaptação de contraste automática para murais com fundos claros (Branco, Amarelo Claro, etc.)
-  const isLight = isLightBackground(board.background_type, board.background_value);
+  // Aplica classe de contraste harmônica (board-light-theme, board-orange-theme ou board-dark-theme)
+  const themeCat = getBackgroundThemeCategory(board.background_type, board.background_value);
   const viewBoard = document.getElementById("view-board");
   if (viewBoard) {
-    viewBoard.classList.toggle("board-light-theme", isLight);
+    viewBoard.classList.remove("board-light-theme", "board-orange-theme", "board-dark-theme");
+    viewBoard.classList.add(`board-${themeCat}-theme`);
   }
 }
 
@@ -1425,6 +1448,20 @@ function getSortableTitle(title) {
   return cleaned || title.trim();
 }
 
+// Ajusta o encaixe vertical estrito da Linha do Tempo para NUNCA haver rolagem vertical no viewport
+function adjustTimelineVerticalFit() {
+  const vb = document.getElementById("view-board");
+  if (!vb || vb.classList.contains("hidden") || state.currentLayout !== "timeline" || !state.activeBoard) {
+    document.body.classList.remove("timeline-mode-active");
+    if (vb) vb.classList.remove("layout-timeline-active");
+    return;
+  }
+
+  document.body.classList.add("timeline-mode-active");
+  vb.classList.add("layout-timeline-active");
+}
+window.addEventListener("resize", adjustTimelineVerticalFit);
+
 function renderCardsList() {
   const container = document.getElementById("board-cards-container");
   const empty = document.getElementById("empty-cards-msg");
@@ -1435,6 +1472,9 @@ function renderCardsList() {
   // 1. Aplica classe do modo de layout selecionado (masonry, grid ou timeline)
   const layout = state.currentLayout || "masonry";
   container.className = `layout-${layout}`;
+
+  // Ajusta encaixe de viewport estrito quando timeline
+  adjustTimelineVerticalFit();
 
   // 2. Filtro de busca
   let list = [...state.cards];
@@ -1559,8 +1599,8 @@ function renderCardsList() {
     }
 
     cardEl.innerHTML = `
-      <!-- Cabeçalho do Card -->
-      <div class="flex items-start justify-between gap-2">
+      <!-- Cabeçalho do Card (Fixo) -->
+      <div class="card-header-section flex-shrink-0 flex items-start justify-between gap-2">
         <div class="flex items-center gap-2 min-w-0 flex-wrap">
           ${(card.pinned || card.is_pinned) ? '<i data-lucide="pin" class="w-3.5 h-3.5 text-[#D75B36] flex-shrink-0 fill-[#D75B36]" title="Fixado no Topo"></i>' : ''}
           <h4 class="font-title text-xs sm:text-sm text-[#0A2334] leading-snug font-semibold line-clamp-2">${escapeHtml(card.title)}</h4>
@@ -1592,17 +1632,20 @@ function renderCardsList() {
         ` : ''}
       </div>
 
-      <!-- Conteúdo de Texto -->
-      ${card.content ? `<p class="font-body text-[11px] sm:text-xs text-gray-700 mt-1.5 whitespace-pre-line leading-relaxed">${escapeHtml(card.content)}</p>` : ''}
+      <!-- Área de Conteúdo do Card (Rola internamente se exceder) -->
+      <div class="card-content-scroll flex-1 min-h-0 overflow-y-auto">
+        <!-- Conteúdo de Texto -->
+        ${card.content ? `<p class="font-body text-[11px] sm:text-xs text-gray-700 mt-1.5 whitespace-pre-line leading-relaxed">${escapeHtml(card.content)}</p>` : ''}
 
-      <!-- Mídia -->
-      ${mediaHtml}
+        <!-- Mídia -->
+        ${mediaHtml}
 
-      <!-- Prévia de Comentários Inline -->
-      ${commentsPreviewHtml}
+        <!-- Prévia de Comentários Inline -->
+        ${commentsPreviewHtml}
+      </div>
 
-      <!-- Rodapé do Card (Autor e Comentários) -->
-      <div class="pt-2.5 mt-2.5 border-t border-gray-100/80 flex items-center justify-between text-[11px] text-gray-600">
+      <!-- Rodapé do Card (Fixo) -->
+      <div class="card-footer-section flex-shrink-0 pt-2 mt-auto border-t border-gray-100/80 flex items-center justify-between text-[11px] text-gray-600">
         <div class="flex items-center gap-1.5 line-clamp-1">
           <div class="w-4 h-4 rounded-full bg-[#173057] text-white flex items-center justify-center font-bold text-[8px] flex-shrink-0">
             ${(card.author_name || "A").charAt(0).toUpperCase()}
